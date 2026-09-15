@@ -5,7 +5,7 @@ The micro cyberdeck is a full arm64 computer in the palm of your hand. With simi
 
 **IMPORTANT:** this is a brand new board and support is limited. Parts of it are not going to easily work out of the box. It's going to take some work, and some reading, and some terminal use, and probably some vibe coding, but people are already gaming on these. I've got mine running for 
 
-![Orthogonal view of the micro-cyberdeck](https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-orthogonal.jpg)
+![Early draft case design showing bash terminal on screen and keypads to both sides](https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-early-draft-case.jpg)
 
 ## Capabilities
 
@@ -19,9 +19,7 @@ AND, you can plug this into any USB-C docking station and essentially have a ful
 
 Yes, the parts list contains affiliate links.
 
-
-![Side view of the micro-cyberdeck](https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-side.jpg)
-
+![Orthogonal view of the micro-cyberdeck](https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-orthogonal.jpg)
 
 ## Parts List
 
@@ -40,6 +38,7 @@ Yes, the parts list contains affiliate links.
   I've stress tested a lot of SD cards and this one is the best I've found.
 - I recommend running [Armbian](https://armbian.com/boards/orangepizero3w) instead of the sketchy OEM image. This is a brand new board so support is still a work in progress. Don't expect everything to be perfect yet, or ever. But my experience has been good so far.
 
+![Side view of the micro-cyberdeck](https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-side.jpg)
 
 ### Future Opportunities
 
