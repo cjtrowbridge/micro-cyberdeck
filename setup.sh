@@ -25,7 +25,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration (override via environment if your device differs)
 # ---------------------------------------------------------------------------
-DECK_USER="${DECK_USER:-cj}"                 # desktop/user the X stack runs as
+DECK_USER="${DECK_USER:-user}"               # desktop/user the X stack runs as
 DECK_HOME="${DECK_HOME:-/home/${DECK_USER}}"
 VNC_PASSWORD="${VNC_PASSWORD:-cyberdeck}"     # max 8 chars; VNC only uses the first 8
 SPI_MHZ="${SPI_MHZ:-48}"                      # userspace + DT ceiling (48 MHz verified)
