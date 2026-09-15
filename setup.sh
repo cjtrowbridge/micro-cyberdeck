@@ -14,9 +14,9 @@
 #   - The GamePi HAT is already attached to the 40-pin header
 #   - You are logged in as root
 #
-# Result after reboot: a 480x480 Xvfb desktop (Openbox + xterm) is captured,
-# scaled 2:1, rotated 180deg, and streamed to the 240x240 ST7789 over SPI3 at
-# 48 MHz (~25-30 fps). VNC is available on localhost:5900 after an SSH tunnel.
+# Result after reboot: a 960x960 Xvfb desktop (Openbox + xterm) is captured,
+# scaled 4:1, rotated 180deg, and streamed to the 240x240 ST7789 over SPI3 at
+# 48 MHz. VNC is available on localhost:5900 after an SSH tunnel.
 #
 # Run:  sudo bash setup.sh
 #
@@ -148,8 +148,8 @@ from Xlib import X, display
 from PIL import Image
 from gpiod.line import Direction, Value
 
-SOURCE_W = 480
-SOURCE_H = 480
+SOURCE_W = 960
+SOURCE_H = 960
 LCD_W = 240
 LCD_H = 240
 
@@ -263,7 +263,7 @@ print(f"X11 root: {geom.width}x{geom.height}")
 
 if geom.width != SOURCE_W or geom.height != SOURCE_H:
     raise RuntimeError(
-        f"Expected 480x480 Xvfb, got {geom.width}x{geom.height}"
+        f"Expected 960x960 Xvfb, got {geom.width}x{geom.height}"
     )
 
 # ------------------------------------------------------------
@@ -289,8 +289,8 @@ def capture():
         "BGRX",
     )
 
-    # Exact 2:1 area downscale:
-    # each LCD pixel represents one 2x2 area of the X desktop.
+    # Exact 4:1 area downscale:
+    # each LCD pixel represents one 4x4 area of the X desktop.
     img = img.resize(
         (LCD_W, LCD_H),
         Image.Resampling.BOX,
@@ -335,7 +335,7 @@ reset()
 print("Initializing LCD")
 init_display()
 
-print("Live bridge running: Xvfb :1 480x480 -> LCD 240x240")
+print("Live bridge running: Xvfb :1 960x960 -> LCD 240x240")
 
 try:
     while True:
@@ -354,14 +354,14 @@ banner "7. Install systemd services"
 
 cat > /etc/systemd/system/gamepi-xvfb.service <<UNIT
 [Unit]
-Description=GamePi 480x480 Xvfb desktop
+Description=GamePi 960x960 Xvfb desktop
 After=network.target
 
 [Service]
 Type=simple
 User=${DECK_USER}
 Environment=HOME=${DECK_HOME}
-ExecStart=/usr/bin/Xvfb :1 -screen 0 480x480x24 -nolisten tcp -noreset
+ExecStart=/usr/bin/Xvfb :1 -screen 0 960x960x24 -nolisten tcp -noreset
 Restart=always
 RestartSec=1
 
@@ -439,8 +439,8 @@ xsetroot -solid '#305080' &
 # Temporary handheld UI: terminal
 xterm \
     -fa "DejaVu Sans Mono" \
-    -fs 10 \
-    -geometry 42x18+20+20 \
+    -fs 18 \
+    -geometry 80x33+8+8 \
     -title "Orange Pi Zero 3W" &
 EOF
 chown -R "${DECK_USER}:${DECK_USER}" "${DECK_HOME}/.config"
@@ -465,7 +465,7 @@ The display stack is configured. A reboot is required for the SPI
 overlays (SPI3 enable + ${SPI_MHZ} MHz ceiling) to take effect.
 
 After reboot, these services start automatically (no manual steps):
-  gamepi-xvfb     Xvfb :1 480x480x24
+  gamepi-xvfb     Xvfb :1 960x960x24
   gamepi-openbox  Openbox session (blue background + terminal)
   gamepi-vnc      x11vnc on localhost:5900
   gamepi-lcd      Xvfb -> ST7789 240x240 bridge at ${SPI_MHZ} MHz
@@ -479,7 +479,7 @@ then point any VNC client at localhost:5900 (password: first 8 chars).
 
 Verify after boot:
   systemctl status gamepi-xvfb gamepi-openbox gamepi-vnc gamepi-lcd
-  DISPLAY=:1 xdpyinfo | grep dimensions      # expect 480x480
+  DISPLAY=:1 xdpyinfo | grep dimensions      # expect 960x960
   ls -l /dev/spidev3.0
 SUMMARY
 
