@@ -1,0 +1,3 @@
+[submodule "agentic-pipelines"]
+	path = agentic-pipelines
+	url = https://github.com/cjtrowbridge/agentic-pipelines
