@@ -41,6 +41,18 @@ Yes, the parts list contains affiliate links.
 
 ![Side view of the micro-cyberdeck](https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-side.jpg)
 
+## Recursive Self-Improvement Out Of The Box
+
+<img src="/projects/2026-09-09-micro-cyberdeck/vscode.jpg" class="full-width-image" alt="VSCode is running!" >  
+
+Because it’s now so easy to run models locally, and because this device has a powerful NPU built in, it can take over the work on itself essentially as soon as you flash Armbian and install your preferred agentic harness.
+
+I started out by installing a desktop environment which was a little complicated, and then installing vs code so I could have it work on itself [in the public repo](https://github.com/cjtrowbridge/micro-cyberdeck) so you can see what it’s doing. Also because I want to figure out how to get the development environment to use higher resolutions than the screen natively supports on VNC or USB while still having it be somewhat legible on the screen. 
+
+My plan is to use my [ebe pipeline](https://github.com/cjtrowbridge/ebe-boilerplate) to build an interactive game-engine style interface that plays nice with the buttons and AI tools.
+
+Here you can see she has vs code open and she is working on herself. Hopefully she will be able to figure out these unresolved issues without much help from me. 💅
+
 ### Future Opportunities
 
 All of these things are currently possible by simply plugging external devices into the ports, but I'd like to fit these capabilites into the micro form-factor.
