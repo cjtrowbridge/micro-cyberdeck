@@ -5,10 +5,22 @@ The micro cyberdeck is a full arm64 computer in the palm of your hand. With simi
 
 **IMPORTANT:** this is a brand new board and support is limited. Parts of it are not going to easily work out of the box. It's going to take some work, and some reading, and some terminal use, and probably some vibe coding, but people are already gaming on these. I've got mine up and running to the point that it is working independently with local AI to figure out how to get the rest of the things working that aren't already working.
 
-![Early draft case design showing bash terminal on screen and keypads to both sides](https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-early-draft-case.jpg)  
+## Why
+
+<img src="https://cjtrowbrdige.com/projects/2026-09-09-micro-cyberdeck/kit.jpg" class="full-width-photo" alt="Current travel kit with pwnagotchi, Flipper Zero, new micro-cyberdeck (with quarter for size comparison), HackRF Portapack H4M, and uConsole">
+
+For me, having a tiny, powerful, AI-capable device as part of my travel kit is going to be immensely helpful. This will be a huge improvement over the uConsole which is enormous and comparatively far less powerful. 
+
+I know what you're thinking, and yes all of these devices talk to each other! Having the AI on the micro-cyberdeck be able to integrate with the other tools and operate them is a big part of the motivation for this project.
+
+<img src="https://cjtrowbrdige.com/projects/2026-09-09-micro-cyberdeck/reduced-kit.jpg" class="full-width-photo" alt="Current travel kit with pwnagotchi, Flipper Zero, HackRF Portapack H4M, and new micro-cyberdeck">
+
+You can see in the second photo what a difference this makes, not just because it's much smaller and easier to pack but also because the micro-cyberdeck is far more powerful than the uConsole.
+
+<img src="https://cjtrowbrdige.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-early-draft-case.jpg" class="full-width-photo" alt="Early draft case design showing bash terminal on screen and keypads to both sides" ><br>
 ***This is an early draft case design with the screen showing a bash terminal window, and the keypads on both sides of the screen. All my case designs are available for free in the link at the bottom.***
 
-## Capabilities
+## The Capabilities
 
 This is a full arm64 computer. It should technically support most Steam games through Proton, though not all of this is realistically going to work perfectly out of the box because a lot of it is still being implemented in the drivers and software.
 
@@ -18,9 +30,9 @@ It has a 1.54" x 1.54" 240x240 screen, a speaker, a headphone jack, a bunch of b
 
 AND, you can plug this into any USB-C docking station and essentially have a full working desktop machine with a normal monitor, keyboard, and mouse. It even supports a full desktop GPU through the PCI-E-3 port.
 
-Yes, the parts list contains affiliate links.
 
-![Orthogonal view of the micro-cyberdeck](https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-orthogonal.jpg)
+<img src="https://cjtrowbrdige.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-side.jpg" class="full-width-photo" alt="Micro Cyberdeck Side View" >
+
 
 ## Parts List
 
@@ -39,11 +51,10 @@ Yes, the parts list contains affiliate links.
   I've stress tested a lot of SD cards and this one is the best I've found.
 - I recommend running [Armbian](https://armbian.com/boards/orangepizero3w) instead of the sketchy OEM image. This is a brand new board so support is still a work in progress. Don't expect everything to be perfect yet, or ever. But my experience has been good so far.
 
-![Side view of the micro-cyberdeck](https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-side.jpg)
 
 ## Recursive Self-Improvement Out Of The Box
 
-<img src="https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/vscode.jpg" class="full-width-image" alt="VSCode is running!" >  
+<img src="https://cjtrowbrdige.com/projects/2026-09-09-micro-cyberdeck/vscode.jpg" class="full-width-image" alt="VSCode is running!" >  
 
 Because it’s now so easy to run models locally, and because this device has a powerful NPU built in, it can take over the work on itself essentially as soon as you flash Armbian and install your preferred agentic harness.
 
@@ -52,6 +63,15 @@ I started out by installing a desktop environment which was a little complicated
 My plan is to use my [ebe pipeline](https://github.com/cjtrowbridge/ebe-boilerplate) to build an interactive game-engine style interface that plays nice with the buttons and AI tools.
 
 Here you can see she has vs code open and she is working on herself. Hopefully she will be able to figure out these unresolved issues without much help from me. 💅
+
+### Known Unresolved Issues
+- I am still working on getting the built-in speaker and keypads working
+- Testing [case designs](https://github.com/cjtrowbridge/vibe-modeling/tree/main/output/micro_cyberdeck_case) with better thermal management because the little fan struggles to keep up by itself and I want to keep the battery insulated from the SBC's heat
+- Testing [manufacturer's recommended ROMs](https://spotpear.com/wiki/Raspberry-Pi-Game-1.54inch-LCD-touchscreen-display-ST7789.html)
+- Getting steam/proton working
+- Building voice-interactive local agent software
+  - Integrating with peripherals like Flipper Zero and pwnagotchi
+- It seems like there is a way to get the SBC to be aware of the battery's charge status but I haven't figured that out yet
 
 ### Future Opportunities
 
@@ -77,6 +97,7 @@ I haven't been able to find a meshtastic hat for the zero form factor, but it wo
 
 
 ### More Resources
+
 - This hat is essentially a clone of [this board](https://spotpear.com/wiki/Raspberry-Pi-Game-1.54inch-LCD-touchscreen-display-ST7789.html) but this is but this clone has been modified with extra features like speakers, aux cord plug, and a battery charge controller which for me makes this clone much better than anything else on the market in this form factor.
 - A lot of the drivers and details related to the original board are super helpful with getting it set up and running.
 - Also, here is [a repo](https://github.com/cjtrowbridge/micro-cyberdeck) containing my canonical setup script which includes all the step's I've taken to get it up and running. I will continue to update this as I get more parts of it working, with the goal of eventually geting Cyberpunk 2077 to run on it.
