@@ -73,6 +73,30 @@ Here you can see she has vs code open and she is working on herself. Hopefully s
   - Integrating with peripherals like Flipper Zero and pwnagotchi
 - It seems like there is a way to get the SBC to be aware of the battery's charge status but I haven't figured that out yet
 
+## Setup
+
+One entrypoint provisions and heals the whole machine — display stack, services,
+VNC, hostname, SPI overlay — as a **re-entrant converge**:
+
+```bash
+sudo bash setup.sh
+```
+
+- Safe to run any time, on any board state: it converges to the desired
+  configuration and writes only what differs. On a healthy board a re-run
+  changes nothing, re-verifies the live system, and exits 0.
+- Audit-only mode (writes nothing): `sudo bash setup.sh --plan`.
+  Unattended/agent mode: `sudo bash setup.sh --yes --reboot --json`
+  (reboots only when an overlay change actually requires it). Flags, phases,
+  exit codes, and the final `RESULT:` line are documented in
+  [docs/setup.md](docs/setup.md).
+- VS Code: the **GamePi: set up the machine** task / play action
+  (`.vscode/`) runs the same command in an integrated terminal, so the sudo
+  prompt and the one reboot question stay visible and answerable.
+- If the board is stuck in one of the two known broken 480-mode states, the
+  one-time rescue scripts `apply-960.sh` / `revert-480.sh` cover it; anything
+  else is a fresh flash + `setup.sh`.
+
 ### Future Opportunities
 
 All of these things are currently possible by simply plugging external devices into the ports, but I'd like to fit these capabilites into the micro form-factor.

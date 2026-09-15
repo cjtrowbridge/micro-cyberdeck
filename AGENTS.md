@@ -22,6 +22,14 @@ never overwrites host-owned content during bootstrap or updates.
 
 ## Host layout
 
+- `setup.sh` — the canonical, re-entrant provisioning entrypoint. Its contract
+  (managed scope, flags, phases, exit codes, reboot policy, result line) is
+  documented in `docs/setup.md`.
+- `docs/setup.md` — the setup/provisioning contract, linked from `setup.sh`.
+  **MANDATE:** any change to `setup.sh` or the provisioning behavior must be
+  documented in `docs/setup.md` in the same change (the script header carries
+  the same mandate and links here), and must pass `apply -> verify` on a live
+  board before the change is committed.
 - `api.sample.yaml` — tracked local-inference template. Copy it to the ignored
   `api.yaml` and supply local values; never commit `api.yaml`.
 - `pipeline.yaml` / `prompts/` — host pipeline definition and customized runtime
