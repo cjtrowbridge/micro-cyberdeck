@@ -1,0 +1,21 @@
+# Local pipeline configuration and runtime evidence (host)
+api.yaml
+state/
+runs/
+threads/
+artifacts/
+failures/
+reports/
+*.rejected.md
+*.rejected.json
+*.rejected.txt
+*.rejected.*
+
+# Dependency target for the pipeline bootstrap helper
+.agentic-pipelines/
+
+# Python tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
