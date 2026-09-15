@@ -43,6 +43,20 @@
  * A feeder thread (the parent, in -F mode) fills a sample ring; the RT
  * tick thread consumes one sample every OS ticks — pin tick rate never
  * drops. Pin parks LOW at EOF or ctrl-c.
+ *
+ * v3.4 (2026-09-15): the 4x-pacing fix. The 4-tick overrun re-anchor at
+ * the bottom of the loop compared `now - next` UNSIGNED; on a healthy
+ * clock now < next, so the difference underflows to ~2^64 and the test
+ * is true EVERY tick. `tis` was reset to 0 on every tick: mode 2 then
+ * consumed a ring sample EVERY tick (4x real-time; self-reported 3.98x)
+ * and mode 0 advanced the sine phase every tick (all sigma tones ~4x
+ * pitch — the unexplained "modem" of early v3 runs). A dedicated bench
+ * that links the real engine looked correct because it never ran main()
+ * — the engine always paced at 1 sample / 4 ticks; only main()'s loop
+ * held the broken re-anchor. The compare is now signed
+ * ((int64_t)(now - next) > 4 * TICK_NS): a true condition now means
+ * behind by more than 4 real ticks. -p mode was immune all along
+ * (uses elapsed time only), which is why it always sounded normal.
  *   ffmpeg -i in.mp3 -ac 1 -ar 48000 -f s16le - | sudo hat-sound
  *   sudo hat-sound -F /path/to/mono48k.s16
  *
@@ -589,7 +603,7 @@ int main(int argc, char **argv)
     const char *stats_path = alt_stats[0] ? alt_stats : STATS_PATH;
     g_stats_f = fopen(stats_path, "w");
     if (g_stats_f) {
-        fprintf(g_stats_f, "hat-sound v3.3 core=%d prio=%d @%d kHz OS=%u\n",
+        fprintf(g_stats_f, "hat-sound v3.4 core=%d prio=%d @%d kHz OS=%u\n",
                 g_core, g_rtprio, (int)(TICK_HZ / 1000), (unsigned)OS);
         if (mode == 2)
             fprintf(g_stats_f, "mode=real audio s16le 48 kHz mono (in: %s)\n",
@@ -608,12 +622,12 @@ int main(int argc, char **argv)
 
     if (mode == 2)
         fprintf(stderr,
-                "hat-sound v3.3: line %u @ %.0f kHz OS=%u core=%d prio=%d "
+                "hat-sound v3.4: line %u @ %.0f kHz OS=%u core=%d prio=%d "
                 "mode=real-audio (s16le 48 kHz mono) — ctrl-c stops\n",
                 AMP_LINE, TICK_HZ / 1000, (unsigned)OS, g_core, g_rtprio);
     else
         fprintf(stderr,
-                "hat-sound v3.3: line %u @ %.0f kHz OS=%u core=%d prio=%d "
+                "hat-sound v3.4: line %u @ %.0f kHz OS=%u core=%d prio=%d "
                 "mode=%s dur=%.0fs — ctrl-c stops\n",
                 AMP_LINE, TICK_HZ / 1000, (unsigned)OS, g_core, g_rtprio,
                 mode == 1 ? "plain" : (single ? "single-tone" : "sigma-delta"),
@@ -672,7 +686,13 @@ int main(int argc, char **argv)
 
         next += TICK_NS;
 
-        if (now - next > 4 * TICK_NS) {
+        /* Signed compare, on purpose: on a healthy clock now < next (the
+         * deadline is still ahead) and `now - next` then UNDERFLOWS the
+         * uint64_t, making an unsigned compare true EVERY tick. That reset
+         * `tis` to 0 on every tick, so mode 0 advanced the phase and mode 2
+         * consumed a sample on EVERY tick = 4x pitch / 4x rate. Found the
+         * hard way (v3.3 field runs: 3.98x real-time, self-reported). */
+        if ((int64_t)(now - next) > (int64_t)(4 * TICK_NS)) {
             next = now + TICK_NS;
             tis = 0;
         }

@@ -16,12 +16,17 @@ provisioned, self-verifying** service, not a hand-built binary in `$HOME`.
 "audio works, RT limit lifted, no stale I2S overlays." This plan turns the
 working `tools/hat-sound.c` (v3.3 real audio) into managed artifacts.
 
-Blocking precondition: **the v3.3 4×-pacing anomaly must be closed first**
-(see `journal/2026-09-15-hat-audio-v3.3-status.md`). Do not fold a binary we
-have not yet proven plays at `1.00x real-time`. The self-report line ships
-in the 01:52 build; one operator run settles it. If `1.00x` → green light.
-If `~4.00x` → resolve on-board (board-side build check, `*tis` phase
-instrumentation) before folding.
+Blocking precondition (UPDATED 2026-09-15 ~10:15): the v3.3 4×-pacing
+bug is **root-caused and fixed in v3.4** — the loop's 4-tick overrun
+re-anchor compared `now - next` as `uint64_t`; on a healthy clock that
+underflows to ~2^64, so the re-anchor fired every tick and `tis` was
+stuck at 0 → 1 sample per tick (the self-report measured 3.98x). Fix:
+signed compare. The engine itself was always correct (the bench links it
+and it never exercises `main()`'s loop — that is why the bench was green
+while the field was 4x). **Remaining gate before folding: ONE operator
+run of the v3.4 binary (`sudo /home/cj/hat-sound -F /home/cj/test.s16`)
+must self-report `1.00x real-time` with the 4 tones at normal pitch.**
+Do not fold a binary we have not heard at `1.00x`.
 
 ## Design decisions
 
@@ -51,14 +56,22 @@ instrumentation) before folding.
 ## Tasks
 
 - [x] Author this plan + the v3.3 status journal (2026-09-15).
-- [?] **Close the v3.3 4×-pacing anomaly.** Operator runs
-      `sudo /home/cj/hat-sound -F /home/cj/test.s16` (01:52 self-report
-      binary); read the final `... N.NNx real-time` line. Accept `1.00x`
-      (and operator hears 4 tones at normal pitch, ~5.5 s). If `~4.00x`,
-      board-side build + `*tis` instrumentation before proceeding.
-- [ ] **Track `tools/hat-sound.c`** (`git add tools/`; it is untracked
-      `??`). Keep `tools/hat-sound-v2.c`, `sd-bench.c` OUT of the commit
-      unless they become reference (they live in `$HOME`, not the repo).
+- [x] **Track `tools/hat-sound.c`** (commit `a63a759`; first git
+      baseline). `hat-sound-v2.c` / `sd-bench.c` stay in `$HOME`, OUT of
+      the repo unless they become reference.
+- [x] **Root-cause the 4×-pacing bug** (2026-09-15 ~10:15). Self-report
+      run: `3.98x real-time` → field really was 4x. Cause: `main()`'s
+      4-tick overrun re-anchor `if (now - next > 4 * TICK_NS)` on
+      `uint64_t` operands underflows on a healthy clock (now < next) and
+      fires every tick, resetting `tis` to 0 → 1 sample/tick. The engine
+      bench was green because it never ran `main()`'s loop. Fix = signed
+      compare; v3.4 built 10:14, md5
+      `38281b372cb30c292a02efb3e0e59a5f`.
+- [?] **Confirm the v3.4 fix live (GATE before folding).** Operator runs
+      `sudo /home/cj/hat-sound -F /home/cj/test.s16`; read the final
+      `... N.NNx real-time` line. Accept `1.00x` + operator hears 4 tones
+      at normal pitch (~5.5 s). If not 1.00x, re-derive from the new
+      numbers — do not guess.
 - [ ] **DESired block additions** in `setup.sh` near L71-81:
       `SOUND_BIN="/usr/local/bin/hat-sound"`; `SOUND_SRC="tools/hat-sound.c"`
       (repo-relative); a `SYSCTL_RT_DROPIN=/etc/sysctl.d/99-sched-rt.conf`;
