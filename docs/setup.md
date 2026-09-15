@@ -17,12 +17,15 @@ next repair run converges away.
 
 | File | Owner | Re-run behavior |
 |---|---|---|
-| `/boot/armbianEnv.txt` (two GamePi lines) | setup.sh | **Additive, byte-stable.** `user_overlays=` (the single value) is set to `spi3-cs0-<MHZ>mhz`; `overlays=` gets the stock `spi3-cs0-cs1-spidev` line appended only when missing. No `sed` rewrites, no unrelated lines ever touched. Hand edits to the GamePi lines are drift, repaired next run. |
+| `/boot/armbianEnv.txt` (two GamePi lines) | setup.sh | **Additive, byte-stable.** `user_overlays=` converges to the desired **set** of user overlays (order-insensitive; the current set is `{spi3-cs0-<MHZ>mhz}` — the buttons' `gpio-keys` overlay joins the set by extending `overlay_desired_set()` in §5, never by another writer); the line is rewritten only when the set differs. `overlays=` gets the stock `spi3-cs0-cs1-spidev` line appended only when missing. No `sed` rewrites of unrelated lines, ever. Hand edits to the GamePi lines are drift, repaired next run. |
 | `/boot/overlay-user/<NAME>.dtbo` (older: `/boot/armbian-overlays/`) | overlay engine | Materialized by `armbian-add-overlay` from the user DTS in §5 of the script; Armbian writes user overlays to `/boot/overlay-user/` (the older name is still recognized when present). If missing while the env line exists, the script re-derives the DTS and re-runs `armbian-add-overlay` (reboot-requiring if the .dtbo bytes differ). |
 | `/root/spi3-cs0-<MHZ>mhz.dts` | setup.sh | The user-space overlay source. Kept when byte-stable; regenerated + re-`armbian-add-overlay` when the DTS on disk differs from §5 (removing it does NOT silently drop the active overlay — the stamp mechanism below decides). |
 | `/root/armbianEnv.txt.before-gamepi` | setup.sh | Created once, on the first overlay edit, as a one-time safety backup. Never churned again. |
 | `/usr/local/bin/xvfb-to-st7789.py` | setup.sh | Compare-then-write against the §6 template. |
-| `/etc/systemd/system/gamepi-{xvfb,openbox,vnc,lcd}.service` | setup.sh | Compare-then-write against the §6 templates. |
+| `/usr/local/bin/hat-sound` | setup.sh | Rebuilt from the tracked `tools/hat-sound.c` (canonical flags, `-lm -lpthread`) on every run; **compare-then-install** — installed only when the bytes differ, and the `gamepi-sound` unit is restarted onto the new binary in the unit-repair step (a binary change is a unit change in disguise). |
+| `/etc/systemd/system/gamepi-{xvfb,openbox,vnc,lcd,sound}.service` | setup.sh | Compare-then-write against the §6 templates. |
+| `/etc/sysctl.d/99-sched-rt.conf` | setup.sh | Compare-then-write: `kernel.sched_rt_runtime_us = -1`. Applied by `systemd-sysctl` (static) at every boot. The board has no `sysctl` binary; the runtime value is already `-1` here, the file is what makes it survive reboots (see Sound). |
+| `/boot/overlay-user/{es8388-audio,i2c0}.dtbo` (older: `/boot/armbian-overlays/`) | setup.sh | **Removed** (logged) when present: wrong-audio-path probe leftovers — the HAT amp is GPIO/PWM pin 12, not I2S, so these bind nothing (verified 2026-09-15: no `i2c-0`, no extra ALSA card). Never re-added. |
 | `<DECK_USER>/.config/openbox/autostart` | setup.sh | Compare-then-write against the §6 template (byte-strict). |
 | `<DECK_USER>/.vnc/passwd` | **the user** | Created (with the provided password, or a generated one) only if absent. Never overwritten, never deleted, no reset flag. Rotation is a manual act: `sudo rm <file>`, re-run with `--vnc-pass` (password is max 8 chars — VNC uses the first 8). |
 | System packages + `default.target=multi-user` | setup.sh (idempotent apt/systemctl) | Re-asserted on every run; apt only runs when something is missing. |
@@ -33,8 +36,9 @@ run repairs them. If you need a permanent custom change, change the template in
 §5 of `setup.sh` (and document it here) — the script converges to its templates,
 never to the filesystem.
 
-The four `gamepi-*.service` files, the bridge script, and the autostart are
-**byte-canonical with the verified live configuration**: setup.sh templates them
+The five `gamepi-*.service` files, the sound binary, the bridge script, the
+sysctl drop-in, and the autostart are **byte-canonical with the verified live
+configuration**: setup.sh templates them
 from its §6 section and compare-then-write — identical bytes never touch disk,
 so the script can be re-run without ever disturbing a healthy machine. One
 deliberate, documented deviation: the `gamepi-lcd` unit carries
@@ -83,17 +87,19 @@ agents get flags, stable exit codes, and one parseable result line.
    the DTS model string (`/proc/device-tree/model`, lowercased — "orange pi zero 3w")
    OR the `BOARD=` id in `armbian-release` (`orangepizero3w`) — either matches;
    deck user exists (auto-detected when `--user` is not given);
-   `armbianEnv.txt` present; CLI invariants (`--reboot` + `--no-reboot` is not
-   allowed). Failures abort exit `2` with `RESULT: PREFLIGHT_FAILED:<reason>`
+   `armbianEnv.txt` present; `tools/hat-sound.c` present relative to the
+   working directory (run from the repo root); `gcc` present; CLI invariants
+   (`--reboot` + `--no-reboot` is not allowed). Failures abort exit `2` with `RESULT: PREFLIGHT_FAILED:<reason>`
    (nothing applied).
 2. **Converge** — apply desired state (scope table; artifacts are the §5–§6
    sections of the script). Every write is compare-then-write: identical
    bytes never touch disk.
 3. **Verify** — see Verification matrix. Pure observation, no writes.
    Immediately before it, in (non-plan) runs, when a unit file was written
-   this run **or** a managed unit is not active, the script runs
-   `systemctl daemon-reload`, then: units whose file was written this run
-   get `systemctl restart` (mandatory — `enable --now` is a no-op on an
+   this run, **a new `hat-sound` binary was installed**, or a managed unit is
+   not active, the script runs `systemctl daemon-reload`, then: units whose
+   file (or binary, for `gamepi-sound`) was written this run get
+   `systemctl restart` (mandatory — `enable --now` is a no-op on an
    already-active unit and would leave the stale process running, a live
    bug found 2026-09-14), and units that are simply not active get
    `systemctl enable --now`. The managed units carry no user state (they
@@ -105,8 +111,8 @@ agents get flags, stable exit codes, and one parseable result line.
    object; exit code per the table below.
 
 `--plan` replaces the write half of converge with a desired-vs-current
-comparison (unit files, bridge, autostart, overlay lines, packages), then
-runs verify. It writes **not a single** byte — no files, no apt, no systemctl,
+comparison (unit files, sound source, sysctl drop-in, bridge, autostart,
+overlay lines + stale overlays, packages), then runs verify. It writes **not a single** byte — no files, no apt, no systemctl,
 no stamp, no log line — never reboots, and exits `1` with
 `RESULT: DRIFT:<n>` when any difference or verify failure exists (exit `0`
 only when converged and verify passes). Reboot mode flags are ignored in plan
@@ -122,8 +128,24 @@ mode and never recorded.
 | 4 | VNC password exists | `<home>/.vnc/passwd` exists, non-empty |
 | 5 | SPI overlay active | `overlays=` contains `spi3-cs0-cs1-spidev` AND `user_overlays=spi3-cs0-<MHZ>mhz` (exact value); `/dev/spidev3.0` exists |
 | 6 | Bridge bound + screen size OK | `systemctl is-active gamepi-lcd.service`; `journalctl -u gamepi-lcd` **since the unit's current `ExecMainStartTimestamp`** contains `X11 root: 960x960` (the line is printed once at process start; anchoring to the current start avoids both the stale-evidence trap and a dead unit passing on old lines) |
-| 7 | Units all active | `systemctl is-active` for all four `gamepi-*` units |
+| 7 | Units all active | `systemctl is-active` for all five `gamepi-*` units (incl. `gamepi-sound` — the idle pin hold) |
 | 8 | SPI clock | `cat /sys/class/spi-master/spi3/max_speed_hz` (informational; logged, not gating) |
+| 9 | RT budget live + persisted | `cat /proc/sys/kernel/sched_rt_runtime_us` == `-1` (the drop-in persists it across reboots; the board has no `sysctl` binary, so the read is from `/proc`) |
+| 10 | Audio topology as intended | `/proc/asound/cards` contains exactly one card, `allwinnerhdmi` (the HAT amp is GPIO/PWM pin 12 — any second card means something bound an I2S path that should not exist here) |
+| 11 | No stale audio-path overlays | no `es8388-audio`/`i2c0` `.dtbo` in `/boot/overlay-user` (or the older directory) and no `i2c-0` under `/sys/bus/i2c/devices` |
+
+Implementation notes (live-verified pitfalls, fixed 2026-09-15 — do not revert):
+
+- Stale-overlay detection (the `--plan` drift audit and row 11) uses pure
+  `[[ -f ]]` tests. An `ls a b | grep -q .` pipeline reports **failure** under
+  the script's `set -o pipefail` whenever *either* operand is missing (GNU
+  `ls` exits 2), so a stale dtbo present in only one of the two directories went
+  undetected by the audit while apply-mode's `[[ -f ]]` removal still fired —
+  observed live on a real board, fixed by removing the pipeline.
+- Row 10 reads the card **name** from `awk -F'[][]'` field `$2` (field `$3` is
+  the driver string) and enforces the count with
+  `grep -c '^[[:space:]]*[0-9]'`. The live format is
+  `NN [cardname  ]: driver - driver` plus an unnumbered continuation line.
 
 Every item reports PASS, FAIL, or SKIPPED. In `--plan` mode, a FAIL or any
 desired-vs-current difference counts toward `RESULT: DRIFT:<n>` (exit 1,
@@ -135,9 +157,12 @@ nothing applied). In apply mode, post-verify failures exit `1` with
 Only overlay changes require a real reboot: any `armbian-add-overlay`
 call whose output actually differs (new `.dtbo`), or a change to the
 `overlays=`/`user_overlays=` lines in `armbianEnv.txt`. Everything else —
-service files, the bridge, autostart, packages, hostname, VNC password —
-is repaired live or takes effect on the next unit start, and never needs a
-reboot.
+service files, the sound binary, the bridge, the sysctl drop-in, autostart,
+packages, hostname, VNC password, stale-overlay removals — is repaired live
+or takes effect on the next unit start / next boot, and never needs a reboot.
+The sysctl drop-in is applied by `systemd-sysctl` at boot; verify proves the
+runtime value from `/proc` either way (and a drop-in write alone never sets
+the reboot flag — the stamp covers overlay state only).
 
 ### The stamp — why re-running after a reboot is a no-op
 
@@ -207,6 +232,8 @@ RESULT: <STATUS>
 | `PREFLIGHT_FAILED:<reason>` | Environment gate failed; nothing applied (exit 2). |
 | `INCOMPLETE:verify` | Apply succeeded; post-verify found failures — names in the lines above (exit 1). |
 | `INCOMPLETE:overlay` | `armbian-add-overlay` failed; overlay state unknown (exit 1). |
+| `INCOMPLETE:sound-src` | `tools/hat-sound.c` missing at apply time (run from the repo root); the sound binary was not touched (exit 1). |
+| `INCOMPLETE:sound-build` | `hat-sound` compilation failed (exit 1). |
 | `INCOMPLETE:interrupted` | Ctrl+C during a run; truthful state line precedes it (exit 130). |
 | `CONVERGED_REBOOT_PENDING` | Converged + verify passed; reboot needed but not performed (exit 3). |
 
@@ -222,6 +249,33 @@ binds the board's interfaces. The security consequences are out of scope for
 now (tracked in `TODO.md`); until then treat VNC as board-LAN-only and
 prefer SSH tunnels (`ssh -L 5901:localhost:5900 cj@pi`) over direct
 connections.
+
+## Sound (hat-sound, v3.5)
+
+`setup.sh` provisions the HAT's amp path as a root service:
+
+- **Binary:** `/usr/local/bin/hat-sound`, built from the tracked
+  `tools/hat-sound.c` on every run (compare-then-install; an install
+  restarts `gamepi-sound` onto the new binary).
+- **Unit:** `gamepi-sound.service` runs `hat-sound -i` (v3.5 idle mode):
+  acquires the amp pin (gpiochip0 line 37 = PB5, header pin 12), parks it
+  LOW, and `pause()`s until SIGTERM. That holds the pin **owned and silent at
+  boot** — no surprise sound, no tick clock, no CPU, no RT-budget spend.
+  `Restart=always` re-parks it if the process ever dies.
+- **RT budget:** `kernel.sched_rt_runtime_us = -1` via
+  `/etc/sysctl.d/99-sched-rt.conf` (applied by `systemd-sysctl` at every
+  boot; the board has no `sysctl` binary). The default 950 ms/1 s RT
+  bandwidth throttles the `SCHED_FIFO` tick loop and distorts playback;
+  verify row 9 proves the runtime value.
+- **Playing is a manual act** (deliberately outside convergence):
+  1. `sudo systemctl stop gamepi-sound` — the pin is released LOW (silent)
+  2. `sudo /usr/local/bin/hat-sound -F <mono48k.s16>` — the RT parent feeds
+     the ring inline; the exit line self-reports the real-time ratio
+  3. `sudo systemctl start gamepi-sound` — the pin is re-parked
+
+Stale audio-path overlays (`es8388-audio`, `i2c0`) are removed on every
+apply run: the HAT amplifier is GPIO/PWM, not I2S (verified 2026-09-15), so
+these dtbos bind nothing — a zombie probe at every boot.
 
 ## Agent usage (recommended loop)
 

@@ -76,6 +76,9 @@ DESIRED_BOARD_ID="orangepizero3w"         # BOARD= in /etc/armbian-release
 DESIRED_OVERLAY_CORE="spi3-cs0-cs1-spidev"
 DESIRED_VNC_PORT=5900
 BRIDGE_PY="/usr/local/bin/xvfb-to-st7789.py"
+SOUND_BIN="/usr/local/bin/hat-sound"      # built from SOUND_SRC (repo)
+SOUND_SRC="tools/hat-sound.c"              # repo-relative to the caller's CWD
+SYSCTL_RT_DROPIN="/etc/sysctl.d/99-sched-rt.conf"   # board has no sysctl binary
 MARK_DIR="/var/lib/micro-cyberdeck"
 
 HOSTNAME_DESIRED="micro-cyberdeck"
@@ -209,6 +212,12 @@ preflight() {
 
   [[ -f /boot/armbianEnv.txt ]] || errs+=("missing_/boot/armbianEnv.txt")
 
+  # sound artifact: repo source (resolved against the caller's CWD — the
+  # documented run form is `sudo bash setup.sh` from the repo root, which
+  # sudo preserves) + build toolchain.
+  if [[ ! -f "$SOUND_SRC" ]]; then errs+=("missing_sound_src:${SOUND_SRC}(run_from_repo_root)"); fi
+  command -v gcc >/dev/null 2>&1 || errs+=("missing_gcc")
+
   if (( ${#errs[@]} > 0 )); then
     local r
     for r in "${errs[@]}"; do log "preflight: $r"; done
@@ -270,6 +279,22 @@ overlay_sig() {
   printf '%s:%s|%s' "$h" "$ov" "$uv"
 }
 
+# user_overlays set semantics: the *set* of user overlays converges, not a
+# single value. overlay_desired_set() is the desired set, sorted and
+# space-joined for a byte-compare; overlay_uvs() is the same normalization of
+# what is on disk (Armbian separates with spaces; order is not guaranteed).
+# Today the set is {spi3-cs0-<MHZ>mhz}; the buttons' gpio-keys overlay joins
+# it later by extending this one function (docs/setup.md "Overlay set").
+overlay_desired_set() {
+  printf '%s\n' $OVERLAY_NAME | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//'
+}
+overlay_uvs() {
+  local uv
+  uv="$(awk -F'=' '$1=="user_overlays" {print $2}' /boot/armbianEnv.txt 2>/dev/null | xargs 2>/dev/null || true)"
+  [[ -n "$uv" ]] || return 0
+  printf '%s\n' $uv | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//'
+}
+
 apply_overlay() {
   local backup="/root/armbianEnv.txt.before-gamepi"
   local sig_before sig_after
@@ -293,12 +318,21 @@ apply_overlay() {
     fi
     uv="$(awk -F'=' '$1=="user_overlays" {print $2}' /boot/armbianEnv.txt 2>/dev/null | xargs 2>/dev/null || true)"
     ov="$(awk -F'=' '$1=="overlays" {print $2}' /boot/armbianEnv.txt 2>/dev/null | xargs 2>/dev/null || true)"
-    if [[ "$uv" != "$OVERLAY_NAME" ]]; then
-      add_item "user_overlays" "DRIFT" "value='${uv}' desired='${OVERLAY_NAME}'"
+    if [[ "$(overlay_uvs)" != "$(overlay_desired_set)" ]]; then
+      add_item "user_overlays" "DRIFT" "value='${uv}' desired='${OVERLAY_NAME}' (set-converge)"
     fi
     if [[ "$ov" != *"$DESIRED_OVERLAY_CORE"* ]]; then
       add_item "overlays" "DRIFT" "missing stock core overlay $DESIRED_OVERLAY_CORE"
     fi
+    # NOTE: pure [-f] tests, not `ls a b | grep -q .` — under set -o pipefail
+    # that pipeline reports failure whenever EITHER operand is missing (GNU ls
+    # exits 2), so a stale file present in only one of the two dirs went
+    # undetected (observed live 2026-09-15).
+    for f in es8388-audio i2c0; do
+      if [[ -f "/boot/overlay-user/${f}.dtbo" || -f "/boot/armbian-overlays/${f}.dtbo" ]]; then
+        add_item "stale-overlay:${f}" "DRIFT" "wrong-audio-path overlay present (removed by apply)"
+      fi
+    done
     return 0
   fi
 
@@ -337,21 +371,42 @@ apply_overlay() {
   fi
 
   # env lines: additive normalization (only our two lines, exact values)
+  # user_overlays converges to the DESIRED SET (not a single value): the
+  # current set is {spi3-cs0-<MHZ>mhz}; future overlays (the buttons'
+  # gpio-keys) are added to overlay_desired_set() and the line is rebuilt,
+  # never sed-overwritten.
   if ! grep -q "^overlays=.*${DESIRED_OVERLAY_CORE}\b" /boot/armbianEnv.txt; then
     echo "overlays=${DESIRED_OVERLAY_CORE}" >> /boot/armbianEnv.txt
     log "env        +overlays=${DESIRED_OVERLAY_CORE}"
     CHANGED_FILES+=("/boot/armbianEnv.txt")
   fi
-  uv="$(awk -F'=' '$1=="user_overlays" {print $2}' /boot/armbianEnv.txt 2>/dev/null | xargs 2>/dev/null || true)"
-  if [[ -n "$uv" && "$uv" == "$OVERLAY_NAME" ]]; then
+  # stale audio-path overlays: the HAT amplifier is GPIO/PWM (header pin 12
+  # = PB5 = gpiochip0 line 37), NOT I2S. es8388-audio + i2c0 were the wrong
+  # I2C/I2S audio path probed on 2026-09-15; they probe and bind nothing on
+  # this HAT (verified: no i2c-0 adapter, no extra ALSA card) — a zombie
+  # probe at every boot. Remove with a logged why; do not re-add.
+  local stale f
+  for f in es8388-audio i2c0; do
+    for stale in /boot/overlay-user/${f}.dtbo /boot/armbian-overlays/${f}.dtbo; do
+      if [[ -f "$stale" ]]; then
+        rm -f "$stale"
+        log "removed    $stale (es8388/i2c0 = wrong I2S audio path; HAT amp is GPIO/PWM)"
+        CHANGED_FILES+=("$stale")
+      fi
+    done
+  done
+
+  uv="$(overlay_uvs)"
+  uvd="$(overlay_desired_set)"
+  if [[ "$uv" == "$uvd" ]]; then
     log "unchanged  env:user_overlays"
   else
     if grep -q "^user_overlays=" /boot/armbianEnv.txt; then
-      sed -i "s|^user_overlays=.*|user_overlays=${OVERLAY_NAME}|" /boot/armbianEnv.txt
+      sed -i "s|^user_overlays=.*|user_overlays=${uvd}|" /boot/armbianEnv.txt
     else
-      echo "user_overlays=${OVERLAY_NAME}" >> /boot/armbianEnv.txt
+      echo "user_overlays=${uvd}" >> /boot/armbianEnv.txt
     fi
-    log "env        set user_overlays=${OVERLAY_NAME}"
+    log "env        set user_overlays=${uvd}"
     CHANGED_FILES+=("/boot/armbianEnv.txt")
   fi
 
@@ -668,6 +723,27 @@ RestartSec=1
 WantedBy=multi-user.target
 EOF
       ;;
+    sound)
+      cat <<EOF
+[Unit]
+Description=GamePi HAT amp pin hold (hat-sound idle, pin LOW)
+After=multi-user.target
+
+[Service]
+Type=simple
+Environment=HOME=/root
+# v3.5 idle: acquires gpiochip0 line 37 (PB5, header pin 12), parks it LOW,
+# and sleeps in pause() until SIGTERM — a parked root, not a CPU consumer,
+# so no X dependency and no X wait. Restart=always re-parks the pin if the
+# process ever dies; stop is the playing-state switch (docs/setup.md "Sound").
+ExecStart=/usr/local/bin/hat-sound -i
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
+EOF
+      ;;
     *) echo "generate_unit: unknown unit $name" >&2; return 1 ;;
   esac
 }
@@ -682,6 +758,48 @@ xterm \
     -geometry 80x33+8+8 \
     -title "Orange Pi Zero 3W" &
 EOF
+}
+
+# Build tools/hat-sound.c -> SOUND_BIN with the repo's canonical flags.
+# compare-then-install: if the fresh build is byte-identical to the installed
+# binary, nothing is touched — a healthy re-run writes zero bytes (the
+# stale-binary drift that burned the 2026-09-15 sessions is exactly what this
+# checks for at provision time). Any install lands in CHANGED_FILES, which the
+# unit-repair phase turns into a restart, so the running idle process is always
+# on the installed binary.
+# Plan mode: report source presence only; build nothing, install nothing.
+build_sound() {
+  local src="$SOUND_SRC" tmp out
+  if (( PLAN_MODE == 1 )); then
+    if [[ -f "$src" ]]; then
+      add_item "sound-src" "OK" "source $src present (build happens in apply mode)"
+    else
+      add_item "sound-src" "DRIFT" "missing $src"
+    fi
+    return 0
+  fi
+  if [[ ! -f "$src" ]]; then
+    log "RESULT: INCOMPLETE:sound-src — missing $src"
+    exit 1
+  fi
+  tmp="$(mktemp "${TMPDIR:-/tmp}/hat-sound-build.XXXXXX")"
+  if ! out="$(gcc -O2 -Wall -Wextra "$src" -o "$tmp" -lm -lpthread 2>&1)"; then
+    log "hat-sound build FAILED:"
+    printf '%s\n' "$out"
+    rm -f "$tmp"
+    log "RESULT: INCOMPLETE:sound-build"
+    exit 1
+  fi
+  if [[ -f "$SOUND_BIN" ]] && cmp -s "$SOUND_BIN" "$tmp"; then
+    rm -f "$tmp"
+    log "unchanged  $SOUND_BIN (built from $src)"
+  else
+    install -m 755 "$tmp" "$SOUND_BIN"
+    rm -f "$tmp"
+    log "applied    $SOUND_BIN (rebuilt from $src)"
+    CHANGED_FILES+=("$SOUND_BIN")
+  fi
+  return 0
 }
 
 # ── §3: converge ───────────────────────────────────────────────────────────
@@ -752,12 +870,18 @@ converge() {
   # (e) overlay (§5)
   apply_overlay
 
-  # (f) artifacts (§6): bridge, four units, autostart — compare-then-write
+  # (f) artifacts (§6): bridge, sound binary, RT drop-in, five units, autostart
   local bridge_content unit target content autostart autostart_content
   bridge_content="$(generate_bridge)"
   write_if_changed "$BRIDGE_PY" 755 root "$bridge_content"
 
-  for unit in xvfb openbox vnc lcd; do
+  build_sound
+  # The board has no sysctl binary; the drop-in is what systemd-sysctl
+  # (static, always present) applies at every boot. Runtime today happens to
+  # be -1 already; the file is what makes that survive.
+  write_if_changed "$SYSCTL_RT_DROPIN" 644 root 'kernel.sched_rt_runtime_us = -1'
+
+  for unit in xvfb openbox vnc lcd sound; do
     target="/etc/systemd/system/gamepi-${unit}.service"
     content="$(generate_unit "$unit")"
     write_if_changed "$target" 644 root "$content"
@@ -783,7 +907,15 @@ converge() {
         touch_units=1
       fi
     done
-    for u in xvfb openbox vnc lcd; do
+    # A new hat-sound binary is a unit-file change in disguise: the running
+    # process must be restarted onto it or the service keeps the old code.
+    for f in "${CHANGED_FILES[@]}"; do
+      if [[ "$f" == "$SOUND_BIN" ]]; then
+        unit_written["gamepi-sound.service"]=1
+        touch_units=1
+      fi
+    done
+    for u in xvfb openbox vnc lcd sound; do
       if [[ "$(systemctl is-active "gamepi-$u.service" 2>/dev/null || true)" != "active" ]]; then
         touch_units=1
       fi
@@ -791,7 +923,7 @@ converge() {
     if (( touch_units == 1 )); then
       log "systemd: daemon-reload + restart changed / start inactive managed units"
       systemctl daemon-reload
-      for u in xvfb openbox vnc lcd; do
+      for u in xvfb openbox vnc lcd sound; do
         svc="gamepi-$u.service"
         if [[ -n "${unit_written[$svc]:-}" ]]; then
           log "systemd: restarting $svc (unit file written this run)"
@@ -816,7 +948,7 @@ converge() {
 # after reboot (spidev node, bridge boot output, units that start at boot on
 # a fresh board) report SKIPPED — not FAIL — so the reboot prompt can fire.
 run_verify() {
-  local xd u hz uv ov st ts ep jview
+  local xd u hz uv ov st ts ep jview alc ncards rtv stale_found i2cdev
 
   if xd="$(DISPLAY=:1 /usr/bin/xdpyinfo 2>/dev/null)"; then
     if printf '%s\n' "$xd" | grep -Eq 'dimensions:[[:space:]]+960x960' \
@@ -829,7 +961,7 @@ run_verify() {
     add_item "xvfb-screen" "FAIL" "xdpyinfo :1 unreachable"
   fi
 
-  for u in xvfb openbox vnc lcd; do
+  for u in xvfb openbox vnc lcd sound; do
     st="$(systemctl is-active "gamepi-$u.service" 2>/dev/null || true)"
     if [[ "$st" == "active" ]]; then
       add_item "unit:$u" "PASS"
@@ -864,6 +996,40 @@ run_verify() {
     fi
   else
     add_item "spi-overlay" "FAIL" "user_overlays='${uv}' desired='${OVERLAY_NAME}'; core-present=$([[ "$ov" == *"$DESIRED_OVERLAY_CORE"* ]] && echo yes || echo no)"
+  fi
+
+  # sound: RT budget + audio topology (fold-in of 2026-09-15, docs/setup.md)
+  rtv="$(cat /proc/sys/kernel/sched_rt_runtime_us 2>/dev/null || true)"
+  if [[ "$rtv" == "-1" ]]; then
+    add_item "rt-sysctl" "PASS" "sched_rt_runtime_us=-1 (persisted by $SYSCTL_RT_DROPIN)"
+  else
+    add_item "rt-sysctl" "FAIL" "sched_rt_runtime_us='${rtv}' desired='-1'" 
+  fi
+
+  # -F'[][]' fields: $1=index, $2=CARD NAME, $3=driver string — the name is $2
+  # (verified live: ' 0 [allwinnerhdmi  ]: allwinner-hdmi - allwinner-hdmi').
+  # $2 (card name) + an explicit count enforce "exactly one card" per docs/setup.md.
+  alc="$(awk -F'[][]' '/^[[:space:]]*[0-9]/ {print $2}' /proc/asound/cards 2>/dev/null | tr -d ' \r' | tr '\n' ' ' | sed 's/ $//')"
+  ncards="$(grep -c '^[[:space:]]*[0-9]' /proc/asound/cards 2>/dev/null || true)"
+  if [[ "$alc" == "allwinnerhdmi" && "$ncards" == "1" ]]; then
+    add_item "audio-cards" "PASS" "single card allwinnerhdmi (HAT audio is GPIO/PWM pin 12, not I2S)"
+  else
+    add_item "audio-cards" "FAIL" "cards='${alc}' count='${ncards}' desired='exactly one card: allwinnerhdmi'"
+  fi
+
+  # same [-f] rationale as the plan-mode loop above (pipefail + GNU ls exit 2)
+  stale_found=""
+  for f in es8388-audio i2c0; do
+    if [[ -f "/boot/overlay-user/${f}.dtbo" || -f "/boot/armbian-overlays/${f}.dtbo" ]]; then
+      stale_found+="$f "
+    fi
+  done
+  i2cdev="$(ls -d /sys/bus/i2c/devices/i2c-0 2>/dev/null || true)"
+  if [[ -n "$i2cdev" ]]; then stale_found+="i2c-0 "; fi
+  if [[ -z "$stale_found" ]]; then
+    add_item "stale-overlays" "PASS" "no es8388/i2c0 overlays, no i2c-0 adapter"
+  else
+    add_item "stale-overlays" "FAIL" "stale: ${stale_found% }"
   fi
 
   # The self-check line is printed once, at process start. Anchor the

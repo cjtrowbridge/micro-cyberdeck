@@ -57,6 +57,14 @@
  * ((int64_t)(now - next) > 4 * TICK_NS): a true condition now means
  * behind by more than 4 real ticks. -p mode was immune all along
  * (uses elapsed time only), which is why it always sounded normal.
+ *
+ * v3.5 (2026-09-15): -i IDLE mode, for the service. Acquires the amp
+ * pin (root), parks it LOW, and holds until SIGTERM/SIGINT — no tick
+ * clock, no CPU, no stats rewrite. That is what gamepi-sound.service
+ * runs at boot (silent: pin owned and LOW, no surprise sound).
+ * Playing = stop the service (pin released LOW), run
+ * `hat-sound -F <file>` (the RT parent feeds the ring inline — no
+ * feeder thread), restart the service (docs/setup.md "Sound").
  *   ffmpeg -i in.mp3 -ac 1 -ar 48000 -f s16le - | sudo hat-sound
  *   sudo hat-sound -F /path/to/mono48k.s16
  *
@@ -65,6 +73,7 @@
  *       sudo /home/cj/hat-sound -p         (10 s plain 1 kHz square)
  *       sudo /home/cj/hat-sound -t 440 -d 5
  *       ffmpeg ... -f s16le - | sudo /home/cj/hat-sound  (real audio)
+ *       sudo /home/cj/hat-sound -i         (idle: pin LOW, holds)
  */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -497,6 +506,7 @@ int main(int argc, char **argv)
     double dur_s     = 10.0;            /* plain / single-tone duration */
     int    single    = 0;               /* -t: single tone, not the program */
     int    raw_src   = 0;               /* -F FILE|-: real s16le 48k mono    */
+    int    idle      = 0;               /* -i: hold the pin LOW (service)    */
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-p") == 0) { mode = 1; dur_s = 10.0; }
@@ -523,14 +533,21 @@ int main(int argc, char **argv)
             if (strcmp(src, "-") != 0)
                 snprintf(g_src_name, sizeof(g_src_name), "%s", src);
         }
+        else if (strcmp(argv[i], "-i") == 0) {
+            idle = 1;
+        }
         else {
             fprintf(stderr,
                     "usage: hat-sound [-p] | [-t HZ] [-d SEC] | "
-                    "[-F FILE|-] [-c CORE] [-r PRIO] [-o PATH]\n");
+                    "[-F FILE|-] | [-i] [-c CORE] [-r PRIO] [-o PATH]\n");
             return 2;
         }
     }
 
+    if (idle && (raw_src || single || mode == 1)) {
+        fprintf(stderr, "hat-sound: -i is idle mode; takes no source or tone args\n");
+        return 2;
+    }
     if (raw_src && (mode == 1 || single)) {
         fprintf(stderr, "hat-sound: -F is standalone real-audio mode (drop -p/-t)\n");
         return 2;
@@ -575,6 +592,23 @@ int main(int argc, char **argv)
     if (pin_acquire() < 0)
         return 1;
 
+    if (idle) {
+        /* Service mode (v3.5): hold the pin LOW and consume nothing.
+         * pause() blocks until on_sig() sets g_stop (SIGTERM from the
+         * unit, SIGINT from ctrl-c). No tick clock, no stats rewrite —
+         * this process must stay off the RT budget. The exit path
+         * (pin_release) parks the pin LOW. */
+        fprintf(stderr,
+                "hat-sound v3.5: line %u — idle: pin LOW until stopped "
+                "(to play: systemctl stop gamepi-sound, then hat-sound -F <file>)\n",
+                AMP_LINE);
+        while (!g_stop)
+            pause();
+        pin_release();
+        fprintf(stderr, "hat-sound: idle stopped — pin released LOW\n");
+        return 0;
+    }
+
     pthread_t feed_tid = 0;
     if (raw_src && g_src_fd == 0) {
         cpu_set_t fcs;
@@ -603,7 +637,7 @@ int main(int argc, char **argv)
     const char *stats_path = alt_stats[0] ? alt_stats : STATS_PATH;
     g_stats_f = fopen(stats_path, "w");
     if (g_stats_f) {
-        fprintf(g_stats_f, "hat-sound v3.4 core=%d prio=%d @%d kHz OS=%u\n",
+        fprintf(g_stats_f, "hat-sound v3.5 core=%d prio=%d @%d kHz OS=%u\n",
                 g_core, g_rtprio, (int)(TICK_HZ / 1000), (unsigned)OS);
         if (mode == 2)
             fprintf(g_stats_f, "mode=real audio s16le 48 kHz mono (in: %s)\n",
@@ -622,12 +656,12 @@ int main(int argc, char **argv)
 
     if (mode == 2)
         fprintf(stderr,
-                "hat-sound v3.4: line %u @ %.0f kHz OS=%u core=%d prio=%d "
+                "hat-sound v3.5: line %u @ %.0f kHz OS=%u core=%d prio=%d "
                 "mode=real-audio (s16le 48 kHz mono) — ctrl-c stops\n",
                 AMP_LINE, TICK_HZ / 1000, (unsigned)OS, g_core, g_rtprio);
     else
         fprintf(stderr,
-                "hat-sound v3.4: line %u @ %.0f kHz OS=%u core=%d prio=%d "
+                "hat-sound v3.5: line %u @ %.0f kHz OS=%u core=%d prio=%d "
                 "mode=%s dur=%.0fs — ctrl-c stops\n",
                 AMP_LINE, TICK_HZ / 1000, (unsigned)OS, g_core, g_rtprio,
                 mode == 1 ? "plain" : (single ? "single-tone" : "sigma-delta"),
