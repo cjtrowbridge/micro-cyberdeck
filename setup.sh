@@ -726,17 +726,27 @@ EOF
     sound)
       cat <<EOF
 [Unit]
-Description=GamePi HAT amp pin hold (hat-sound idle, pin LOW)
+Description=GamePi HAT sound daemon (hat-sound v3.6: pin hold + socket engine)
 After=multi-user.target
 
 [Service]
 Type=simple
 Environment=HOME=/root
-# v3.5 idle: acquires gpiochip0 line 37 (PB5, header pin 12), parks it LOW,
-# and sleeps in pause() until SIGTERM — a parked root, not a CPU consumer,
-# so no X dependency and no X wait. Restart=always re-parks the pin if the
-# process ever dies; stop is the playing-state switch (docs/setup.md "Sound").
-ExecStart=/usr/local/bin/hat-sound -i
+# v3.6 daemon: acquires gpiochip0 line 37 (PB5, header pin 12) ONCE at start,
+# binds /run/gamepi-sound.sock (0666, set engine-side: fchmod(fd) +
+# chmod(path) — this kernel needs the path chmod to move the path-mode view,
+# see socket_bind in tools/hat-sound.c), and serves serialized-on-accept PCM jobs
+# (raw s16le 48 kHz mono, one client at a time). The tick path is the frozen
+# v3.3 grid. Per-job stats go to the journal, not to /run stats files.
+# No RuntimeDirectory: the socket lives at /run/gamepi-sound.sock (directly in
+# /run, which is tmpfs — cleared at boot; the engine unlinks it on clean
+# exit and re-unlinks a stale one at bind).
+# Stop is clean: SIGTERM/SIGINT are installed via sigaction WITHOUT
+# SA_RESTART, so the engine exits promptly from its blocking accept()
+# (pin released LOW) instead of the silently-restarted accept that
+# forced a 90 s TimeoutStopSec + SIGKILL;
+# Restart=always re-owns the pin and re-binds the socket if the process dies.
+ExecStart=/usr/local/bin/hat-sound -d /run/gamepi-sound.sock
 Restart=always
 RestartSec=1
 
@@ -1015,6 +1025,15 @@ run_verify() {
     add_item "audio-cards" "PASS" "single card allwinnerhdmi (HAT audio is GPIO/PWM pin 12, not I2S)"
   else
     add_item "audio-cards" "FAIL" "cards='${alc}' count='${ncards}' desired='exactly one card: allwinnerhdmi'"
+  fi
+
+  # v3.6: the gamepi-sound unit runs the socket engine (plan 2026-09-15 WS2),
+  # so a healthy board has /run/gamepi-sound.sock present. Plan mode before
+  # the first v3.6 apply legitimately FAILs this (the old unit ran -i).
+  if [[ -S /run/gamepi-sound.sock ]]; then
+    add_item "sound-socket" "PASS" "daemon socket present (hat-sound v3.6 engine)"
+  else
+    add_item "sound-socket" "FAIL" "/run/gamepi-sound.sock absent (gamepi-sound not on the v3.6 daemon)"
   fi
 
   # same [-f] rationale as the plan-mode loop above (pipefail + GNU ls exit 2)

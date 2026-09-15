@@ -68,12 +68,39 @@
  *   ffmpeg -i in.mp3 -ac 1 -ar 48000 -f s16le - | sudo hat-sound
  *   sudo hat-sound -F /path/to/mono48k.s16
  *
+ * v3.6 (2026-09-15): -d SOCKET daemon mode, for the service. Binds a unix
+ * stream socket (0666, any-user clients) and SERIALIZES ON ACCEPT: one
+ * client at a time, extras block in accept(). Each client is one job — the
+ * feeder thread reads the client's raw s16le 48 kHz mono (the client's
+ * close = EOF), the SAME FROZEN tick path plays it, the per-job stats line
+ * and self-report go to stderr (= the service journal), then the process
+ * returns to accept with the pin still owned and LOW between jobs. The pin
+ * is acquired ONCE at start and released only on SIGTERM/exit — the
+ * stop/start dance is dead. -i (idle hold) stays as the rescue path for
+ * the same pin; the unit runs -d /run/gamepi-sound.sock. -d (daemon)
+ * replaced -d SEC (duration); tones now take --duration SEC.
+ * Two post-deploy fixes (2026-09-15, field evidence in journal/):
+ *   - socket 0666 was set with fchmod(fd) alone, which on this vendor
+ *     kernel/tmpfs does not move the path-entry mode that connect()/stat()
+ *     consult — first client got EACCES. socket_bind now also does
+ *     chmod(path, 0666); the chmod is the load-bearing call.
+ *   - SIGTERM was installed with plain signal(); on glibc that carries
+ *     SA_RESTART, so the daemon's blocking accept() was silently restarted
+ *     after the handler set g_stop and the stop never arrived — systemd
+ *     waited the full TimeoutStopSec and SIGKILLed. The stop signals now
+ *     use sigaction(SA_NODEFER, and crucially WITHOUT SA_RESTART, which
+ *     glibc's plain signal() implies) so accept() returns -1/EINTR and the
+ *     existing loop condition exits cleanly (pin released LOW, the
+ *     journal's "daemon stopped — pin released LOW"). The one-shot tick loop
+ *     was unaffected (pure spin reads g_stop every tick). Tick path FROZEN.
+ *
  * Build: gcc -O2 -Wall -Wextra -o hat-sound tools/hat-sound.c -lm -lpthread
  * Run : sudo /home/cj/hat-sound            (25 s sigma-delta program)
  *       sudo /home/cj/hat-sound -p         (10 s plain 1 kHz square)
- *       sudo /home/cj/hat-sound -t 440 -d 5
+ *       sudo /home/cj/hat-sound -t 440     (--duration 5 for N seconds)
  *       ffmpeg ... -f s16le - | sudo /home/cj/hat-sound  (real audio)
- *       sudo /home/cj/hat-sound -i         (idle: pin LOW, holds)
+ *       sudo /home/cj/hat-sound -i         (idle rescue: pin LOW, holds)
+ *       sudo /home/cj/hat-sound -d SOCK    (socket daemon: accepts PCM jobs)
  */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -92,6 +119,9 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
+#include <sys/socket.h>      /* v3.6: -d SOCKET daemon */
+#include <sys/stat.h>
+#include <sys/un.h>
 
 /* ---- kernel GPIO v2 ABI (linux v6.6 uapi, copied verbatim — board     */
 /* runs 6.6.98-vendor-sun60iw2; layout proven on this board: v1/v2 both  */
@@ -194,6 +224,9 @@ static void on_sig(int s) { (void)s; g_stop = 1; }
 static int      g_core    = 1;                           /* -c CORE    */
 static int      g_rtprio  = 98;                          /* -r PRIO    */
 static char     alt_stats[256] = { 0 };                  /* -o PATH    */
+static char     g_sock_path[128] = { 0 };                /* -d SOCKET  */
+static int      g_daemon  = 0;                           /* -d present */
+static int      g_listen_fd = -1;
 
 static int g_line_fd = -1;
 
@@ -210,8 +243,10 @@ static const unsigned long g_mask = RING_MAX - 1;
 static _Atomic unsigned long g_prod, g_cons;   /* unbounded wrap counters */
 static _Atomic int   g_feed_eof  = 0;
 static _Atomic uint64_t g_underrun;            /* sample slots seen empty */
-static int   g_src_fd    = -1;                /* 0 = stdin; else file */
+static int   g_src_fd    = -1;                 /* 0 = stdin; else a file,
+                                                 or (v3.6 daemon) the client fd */
 static char  g_src_name[256] = { 0 };
+static int   local_conn  = -1;                 /* daemon: active client fd */
 
 static inline unsigned long ring_free(void)
 {
@@ -242,9 +277,19 @@ static int feed_more(void)
     }
 }
 
+/* v3.6: in daemon mode this thread is spawned AFTER rt_setup() has made the
+ * process FIFO g_rtprio, so it inherits that policy. A FIFO thread here is
+ * a standing hazard (it would never preempt the tick loop on the neighbor
+ * core, but a runaway FIFO task is never fine), so re-drop to CFS: the
+ * feeder only ever blocks in read() and copies bytes — the original
+ * stdin-mode contract of "a plain CFS reader parked in read()". */
 static void *feed_thread(void *arg)
 {
     (void)arg;
+    if (g_daemon) {
+        struct sched_param p = { 0 };
+        (void)sched_setscheduler(0, SCHED_OTHER, &p);
+    }
     for (;;) {
         int r = feed_more();
         if (r == 0)      continue;           /* got bytes */
@@ -432,6 +477,55 @@ static struct phase PHASES[] = {
 
 static char single_label[32];                    /* label for -t mode */
 
+/* ---- v3.6 socket daemon ---------------------------------------------- */
+/* Bind the job socket. 0666: the engine is the only root-owned process in
+ * the audio path and the socket is its door — any-user clients (the ALSA
+ * plugin lands in the user's process) must knock on it; the pin itself
+ * never leaves this root engine. unlink first: the unit sets
+ * RuntimeDirectory=gamepi-sound (the dir goes at boot), but a stale socket
+ * from a kill -9 without clean shutdown must not poison the boot start. */
+static int socket_bind(const char *path)
+{
+    struct sockaddr_un a;
+    memset(&a, 0, sizeof(a));
+    a.sun_family = AF_UNIX;
+    if (strlen(path) >= sizeof(a.sun_path)) {
+        fprintf(stderr, "hat-sound: socket path too long: %s\n", path);
+        return -1;
+    }
+    strncpy(a.sun_path, path, sizeof(a.sun_path) - 1);
+    unlink(path);                                   /* stale socket, if any */
+    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (fd < 0) {
+        fprintf(stderr, "hat-sound: socket: %s\n", strerror(errno));
+        return -1;
+    }
+    if (bind(fd, (struct sockaddr *)&a, sizeof(a)) < 0) {
+        fprintf(stderr, "hat-sound: bind %s: %s\n", path, strerror(errno));
+        close(fd);
+        return -1;
+    }
+    /* 0666 = any-user door. Set it BOTH on the fd and on the path: on this
+     * board's vendor kernel/tmpfs, a bare fchmod(fd) on the listen socket
+     * does NOT move the mode the directory entry reports (isolated test:
+     * fstat shows 0666 while stat(path) stays 0755), and connect() + the
+     * client's stat() use the *path* view — so clients were EACCES.
+     * chmod(path) is the reliable lever; keep fchmod as harmless redundancy. */
+    (void)fchmod(fd, 0666);
+    if (chmod(path, 0666) < 0) {
+        fprintf(stderr, "hat-sound: chmod 0666 %s: %s\n", path, strerror(errno));
+        close(fd);
+        unlink(path);
+        return -1;
+    }
+    if (listen(fd, 2) < 0) {                        /* small backlog: serial */
+        fprintf(stderr, "hat-sound: listen %s: %s\n", path, strerror(errno));
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
 /* ---- engine ----------------------------------------------------------- */
 
 /* One tick of work. mode 0 = sigma-delta tones; mode 1 = plain square of
@@ -513,8 +607,14 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "-t") == 0 && i + 1 < argc) {
             mode = 0; single = 1; plain_hz = atof(argv[++i]);
         }
-        else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
+        else if (strcmp(argv[i], "--duration") == 0 && i + 1 < argc) {
             dur_s = atof(argv[++i]);
+        }
+        else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
+            /* v3.6: -d SOCKET = daemon mode (replaces the old -d duration
+             * seconds; tone modes now use --duration). */
+            snprintf(g_sock_path, sizeof(g_sock_path), "%s", argv[++i]);
+            g_daemon = 1;
         }
         else if (strcmp(argv[i], "-c") == 0 && i + 1 < argc) {
             g_core = atoi(argv[++i]);
@@ -538,12 +638,20 @@ int main(int argc, char **argv)
         }
         else {
             fprintf(stderr,
-                    "usage: hat-sound [-p] | [-t HZ] [-d SEC] | "
-                    "[-F FILE|-] | [-i] [-c CORE] [-r PRIO] [-o PATH]\n");
+                    "usage: hat-sound [-p] | [-t HZ] [--duration SEC] | "
+                    "[-F FILE|-] | [-i] | [-d SOCKET] "
+                    "[-c CORE] [-r PRIO] [-o PATH]\n"
+                    "  -d SOCKET  unix socket daemon: accepts PCM job streams\n"
+                    "             (raw s16le 48 kHz mono; one client at a time)\n");
             return 2;
         }
     }
 
+    if (g_daemon && (idle || raw_src || single || mode == 1)) {
+        fprintf(stderr,
+                "hat-sound: -d SOCKET is daemon mode; takes no source or tone args\n");
+        return 2;
+    }
     if (idle && (raw_src || single || mode == 1)) {
         fprintf(stderr, "hat-sound: -i is idle mode; takes no source or tone args\n");
         return 2;
@@ -562,10 +670,33 @@ int main(int argc, char **argv)
     }
     if (raw_src)
         PHASES[0].label = "audio";
+    if (g_daemon)
+        PHASES[0].label = "socket";                /* per-job stats label */
 
-    signal(SIGINT, on_sig);
-    signal(SIGTERM, on_sig);
-    signal(SIGPIPE, SIG_IGN);
+    struct sigaction sa_stop, sa_pipe;
+    memset(&sa_stop, 0, sizeof(sa_stop));
+    sa_stop.sa_handler = on_sig;
+    /* sigaction WITHOUT SA_RESTART: the daemon idles in a blocking
+     * accept(); glibc's plain signal() implicitly installs SA_RESTART,
+     * which silently resumes accept() after the handler sets g_stop —
+     * the stop is never observed and systemd escalates to SIGKILL
+     * (TimeoutStopSec). Omitting SA_RESTART keeps accept() returning
+     * -1/EINTR so the existing loop condition exits. SA_NODEFER: a
+     * repeated stop signal is not deferred past the next blocking call. */
+    sa_stop.sa_flags = SA_NODEFER;
+    sigemptyset(&sa_stop.sa_mask);
+    if (sigaction(SIGINT,  &sa_stop, NULL) != 0 ||
+        sigaction(SIGTERM, &sa_stop, NULL) != 0) {
+        fprintf(stderr, "hat-sound: sigaction: %s\n", strerror(errno));
+        return 1;
+    }
+    memset(&sa_pipe, 0, sizeof(sa_pipe));
+    sa_pipe.sa_handler = SIG_IGN;
+    sigemptyset(&sa_pipe.sa_mask);
+    if (sigaction(SIGPIPE, &sa_pipe, NULL) != 0) {
+        fprintf(stderr, "hat-sound: sigaction SIGPIPE: %s\n", strerror(errno));
+        return 1;
+    }
 
     if (raw_src) {
         g_ring = malloc(RING_MAX);
@@ -589,8 +720,26 @@ int main(int argc, char **argv)
         }
     }
 
-    if (pin_acquire() < 0)
+    if (g_daemon) {
+        g_ring = malloc(RING_MAX);
+        if (!g_ring) {
+            fprintf(stderr, "hat-sound: ring alloc: %s\n", strerror(errno));
+            return 1;
+        }
+        g_listen_fd = socket_bind(g_sock_path);
+        if (g_listen_fd < 0)
+            return 1;
+        mode = 2;                             /* daemon jobs are real audio */
+    }
+
+    if (pin_acquire() < 0) {
+        if (g_daemon && g_listen_fd > 0) {    /* don't leak the socket path */
+            close(g_listen_fd);
+            unlink(g_sock_path);
+            g_listen_fd = -1;
+        }
         return 1;
+    }
 
     if (idle) {
         /* Service mode (v3.5): hold the pin LOW and consume nothing.
@@ -599,8 +748,9 @@ int main(int argc, char **argv)
          * this process must stay off the RT budget. The exit path
          * (pin_release) parks the pin LOW. */
         fprintf(stderr,
-                "hat-sound v3.5: line %u — idle: pin LOW until stopped "
-                "(to play: systemctl stop gamepi-sound, then hat-sound -F <file>)\n",
+                "hat-sound v3.6: line %u — idle: pin LOW until stopped "
+                "(fallback player: systemctl stop gamepi-sound, "
+                "then hat-sound -F <file>, then systemctl start gamepi-sound)\n",
                 AMP_LINE);
         while (!g_stop)
             pause();
@@ -609,21 +759,31 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    int nph = 1;                        /* single/tone/real-audio: 1 phase */
+    if (!single && mode == 0 && !g_daemon) nph = N_PHASES;
+
+    if (g_daemon)
+        fprintf(stderr,
+                "hat-sound v3.6: line %u @ %.0f kHz OS=%u core=%d prio=%d "
+                "mode=socket-daemon socket=%s — clients stream raw s16le "
+                "48 kHz mono, one at a time; ctrl-c/SIGTERM stops\n",
+                AMP_LINE, TICK_HZ / 1000, (unsigned)OS, g_core, g_rtprio,
+                g_sock_path);
+
+    /* one-shot stdin feeder: spawned BEFORE rt_setup so it is plain CFS
+     * from birth (v3.5 ordering). The daemon's per-job threads spawn
+     * AFTER rt_setup and explicitly re-drop to CFS (see feed_thread). */
     pthread_t feed_tid = 0;
     if (raw_src && g_src_fd == 0) {
         cpu_set_t fcs;
-        CPU_ZERO(&fcs);
-        CPU_SET(g_core, &fcs);
         if (pthread_create(&feed_tid, NULL, feed_thread, NULL) != 0) {
             fprintf(stderr, "hat-sound: feeder thread: %s\n", strerror(errno));
             pin_release();
             return 1;
         }
-        /* created before rt_setup() => inherits plain CFS. It must NOT
-         * share g_core: the tick thread spins (never sleeps) at FIFO 98,
-         * which occupies the core 100% preemption-wise, so a CFS reader
-         * there would starve. One neighbor core, parked in read() when
-         * the ring is full, is cheap. */
+        /* One neighbor core, parked in read() when the ring is full. It
+         * must NOT share g_core: the tick thread spins (never sleeps) at
+         * FIFO 98 and would starve a same-core reader. */
         long nc = sysconf(_SC_NPROCESSORS_ONLN);
         if (nc < 2) nc = 2;
         CPU_ZERO(&fcs);
@@ -634,10 +794,117 @@ int main(int argc, char **argv)
 
     rt_setup();
 
+    if (g_daemon) {
+        /* SERIALIZED ON ACCEPT (design decision, plan 2026-09-15-13-17-28):
+         * one client at a time; extras block in accept(). Each job = the
+         * FROZEN tick loop fed by the per-job feeder thread below; stats
+         * are per-job to stderr (the unit journal). The pin stays owned
+         * and LOW between jobs; the process does not return until stop. */
+        while (!g_stop) {
+            int conn = accept(g_listen_fd, NULL, NULL);
+            if (conn < 0) {
+                if (g_stop) break;        /* SIGTERM: accept was interrupted */
+                if (errno == EINTR) continue;
+                fprintf(stderr, "hat-sound: accept: %s\n", strerror(errno));
+                break;
+            }
+            local_conn   = conn;
+            g_src_fd     = conn;          /* the feeder's source for this job */
+            g_src_name[0] = '\0';         /* raw stream: no head check, no name */
+            g_prod = 0; g_cons = 0; g_feed_eof = 0; g_underrun = 0;
+            g_sda  = 0;                   /* reset the modulator integrator   */
+
+            pthread_t job_tid = 0;
+            if (pthread_create(&job_tid, NULL, feed_thread, NULL) != 0) {
+                fprintf(stderr, "hat-sound: feeder thread: %s\n", strerror(errno));
+                close(conn);
+                local_conn = -1;
+                g_src_fd = -1;
+                break;
+            }
+            /* neighbor core, as in stdin mode (tick thread owns g_core);
+             * the thread itself re-drops to CFS at entry. */
+            cpu_set_t fcs;
+            long nc = sysconf(_SC_NPROCESSORS_ONLN);
+            if (nc < 2) nc = 2;
+            CPU_ZERO(&fcs);
+            CPU_SET((g_core % (int)nc + 1) % (int)nc, &fcs);
+            (void)pthread_setaffinity_np(job_tid, sizeof(fcs), &fcs);
+            (void)pthread_setname_np(job_tid, "hatfeed");
+
+            struct seg s;
+            seg_reset(&s);
+            double  ph  = 0.0;
+            int16_t s16 = 0;
+            int     tis = 0;
+            uint64_t t0   = now_ns();
+            uint64_t next = t0 + TICK_NS;
+
+            while (!g_stop) {
+                /* FROZEN tick path — same shape, same grid, same signed
+                 * re-anchor as the one-shot loop below. Do not retune. */
+                uint64_t now  = now_ns();
+                uint64_t el   = now - t0;
+
+                if (g_feed_eof && g_cons + 2 > g_prod)
+                    break;                /* EOF: nothing left to read */
+
+                int lvl = engine_tick(mode, el, 0, plain_hz, &ph, &s16, &tis);
+                pin_set(lvl);
+                if (lvl) s.high++;
+
+                wait_deadline(next, &now);
+                int64_t dev = (int64_t)(now - next);
+                if (dev < 0) dev = -dev;
+                uint64_t du = (uint64_t)dev;                  /* already abs() */
+                s.sumd += du;
+                if (du > s.maxd) s.maxd = du;
+                if (dev > 1000) s.late++;
+                if (du > 1000000ull)  s.x1ms++;
+                if (du > 10000000ull) s.x10ms++;
+                s.n++;
+
+                next += TICK_NS;
+
+                if ((int64_t)(now - next) > (int64_t)(4 * TICK_NS)) {
+                    next = now + TICK_NS;
+                    tis = 0;
+                }
+            }
+
+            /* job end: client EOF + ring drained (or stop signal). */
+            pthread_join(job_tid, NULL);
+            close(conn);
+            local_conn = -1;
+            g_src_fd = -1;
+
+            stats_line(PHASES[0].label, &s, now_ns() - t0);
+            {
+                unsigned long cb = (unsigned long)g_cons;
+                double rt_s  = (double)(now_ns() - t0) / 1e9;
+                double pps   = rt_s ? (double)(cb / 2) / rt_s : 0.0;
+                fprintf(stderr,
+                        "hat-sound: job (v3.6 daemon) %s — source %lu B, "
+                        "consumed %lu B (%lu samples, %.1f Hz, %.2fx real-time), "
+                        "underruns %lu\n",
+                        g_stop ? "stopped (signal)" : "client EOF, ring drained",
+                        (unsigned long)g_prod, cb, cb / 2, pps, pps / AUD_HZ,
+                        (unsigned long)g_underrun);
+            }
+            /* back to accept: pin still owned, LOW between jobs. */
+        }
+
+        if (g_listen_fd > 0) { close(g_listen_fd); g_listen_fd = -1; }
+        unlink(g_sock_path);
+        pin_release();
+        fprintf(stderr, "hat-sound: daemon stopped — pin released LOW\n");
+        return 0;
+    }
+
     const char *stats_path = alt_stats[0] ? alt_stats : STATS_PATH;
     g_stats_f = fopen(stats_path, "w");
     if (g_stats_f) {
-        fprintf(g_stats_f, "hat-sound v3.5 core=%d prio=%d @%d kHz OS=%u\n",
+        fprintf(g_stats_f, "hat-sound v3.6 core=%d prio=%d @%d kHz OS=%u\n",
                 g_core, g_rtprio, (int)(TICK_HZ / 1000), (unsigned)OS);
         if (mode == 2)
             fprintf(g_stats_f, "mode=real audio s16le 48 kHz mono (in: %s)\n",
@@ -651,17 +918,14 @@ int main(int argc, char **argv)
         fflush(g_stats_f);
     }
 
-    int nph = 1;                        /* single/tone/real-audio: 1 phase */
-    if (!single && mode == 0) nph = N_PHASES;
-
     if (mode == 2)
         fprintf(stderr,
-                "hat-sound v3.5: line %u @ %.0f kHz OS=%u core=%d prio=%d "
+                "hat-sound v3.6: line %u @ %.0f kHz OS=%u core=%d prio=%d "
                 "mode=real-audio (s16le 48 kHz mono) — ctrl-c stops\n",
                 AMP_LINE, TICK_HZ / 1000, (unsigned)OS, g_core, g_rtprio);
     else
         fprintf(stderr,
-                "hat-sound v3.5: line %u @ %.0f kHz OS=%u core=%d prio=%d "
+                "hat-sound v3.6: line %u @ %.0f kHz OS=%u core=%d prio=%d "
                 "mode=%s dur=%.0fs — ctrl-c stops\n",
                 AMP_LINE, TICK_HZ / 1000, (unsigned)OS, g_core, g_rtprio,
                 mode == 1 ? "plain" : (single ? "single-tone" : "sigma-delta"),

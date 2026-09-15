@@ -24,6 +24,7 @@ next repair run converges away.
 | `/usr/local/bin/xvfb-to-st7789.py` | setup.sh | Compare-then-write against the §6 template. |
 | `/usr/local/bin/hat-sound` | setup.sh | Rebuilt from the tracked `tools/hat-sound.c` (canonical flags, `-lm -lpthread`) on every run; **compare-then-install** — installed only when the bytes differ, and the `gamepi-sound` unit is restarted onto the new binary in the unit-repair step (a binary change is a unit change in disguise). |
 | `/etc/systemd/system/gamepi-{xvfb,openbox,vnc,lcd,sound}.service` | setup.sh | Compare-then-write against the §6 templates. |
+| `/run/gamepi-sound.sock` | `gamepi-sound` engine | **Transient, not setup.sh content.** `/run` is tmpfs — cleared at boot; the v3.6 daemon binds the socket at unit start (0666 via `fchmod(fd)` **and** `chmod(path)` — field finding 2026-09-15: on this vendor kernel/tmpfs a bare `fchmod` does not move the path-mode view that `connect()`/`stat()` use, so the engine does both), and unlinks it on exit. Verify row 12 probes its presence. No `RuntimeDirectory` in the unit — the socket sits directly in `/run`, which is wipe-cleared independently. |
 | `/etc/sysctl.d/99-sched-rt.conf` | setup.sh | Compare-then-write: `kernel.sched_rt_runtime_us = -1`. Applied by `systemd-sysctl` (static) at every boot. The board has no `sysctl` binary; the runtime value is already `-1` here, the file is what makes it survive reboots (see Sound). |
 | `/boot/overlay-user/{es8388-audio,i2c0}.dtbo` (older: `/boot/armbian-overlays/`) | setup.sh | **Removed** (logged) when present: wrong-audio-path probe leftovers — the HAT amp is GPIO/PWM pin 12, not I2S, so these bind nothing (verified 2026-09-15: no `i2c-0`, no extra ALSA card). Never re-added. |
 | `<DECK_USER>/.config/openbox/autostart` | setup.sh | Compare-then-write against the §6 template (byte-strict). |
@@ -128,11 +129,12 @@ mode and never recorded.
 | 4 | VNC password exists | `<home>/.vnc/passwd` exists, non-empty |
 | 5 | SPI overlay active | `overlays=` contains `spi3-cs0-cs1-spidev` AND `user_overlays=spi3-cs0-<MHZ>mhz` (exact value); `/dev/spidev3.0` exists |
 | 6 | Bridge bound + screen size OK | `systemctl is-active gamepi-lcd.service`; `journalctl -u gamepi-lcd` **since the unit's current `ExecMainStartTimestamp`** contains `X11 root: 960x960` (the line is printed once at process start; anchoring to the current start avoids both the stale-evidence trap and a dead unit passing on old lines) |
-| 7 | Units all active | `systemctl is-active` for all five `gamepi-*` units (incl. `gamepi-sound` — the idle pin hold) |
+| 7 | Units all active | `systemctl is-active` for all five `gamepi-*` units (incl. `gamepi-sound` — the v3.6 socket engine daemon) |
 | 8 | SPI clock | `cat /sys/class/spi-master/spi3/max_speed_hz` (informational; logged, not gating) |
 | 9 | RT budget live + persisted | `cat /proc/sys/kernel/sched_rt_runtime_us` == `-1` (the drop-in persists it across reboots; the board has no `sysctl` binary, so the read is from `/proc`) |
 | 10 | Audio topology as intended | `/proc/asound/cards` contains exactly one card, `allwinnerhdmi` (the HAT amp is GPIO/PWM pin 12 — any second card means something bound an I2S path that should not exist here) |
 | 11 | No stale audio-path overlays | no `es8388-audio`/`i2c0` `.dtbo` in `/boot/overlay-user` (or the older directory) and no `i2c-0` under `/sys/bus/i2c/devices` |
+| 12 | HAT sound daemon socket | `[[ -S /run/gamepi-sound.sock ]]` — the v3.6 daemon bound the PCM socket (0666, any user may connect; serialized on accept). Transient: created at unit start (bind), unlinked by the engine on exit, wiped by the tmpfs `/run` at boot. A `--plan` run **before** the first v3.6 apply legitimately FAILs this row (the old unit ran `-i`). |
 
 Implementation notes (live-verified pitfalls, fixed 2026-09-15 — do not revert):
 
@@ -250,28 +252,61 @@ now (tracked in `TODO.md`); until then treat VNC as board-LAN-only and
 prefer SSH tunnels (`ssh -L 5901:localhost:5900 cj@pi`) over direct
 connections.
 
-## Sound (hat-sound, v3.5)
+## Sound (hat-sound, v3.6)
 
-`setup.sh` provisions the HAT's amp path as a root service:
+`setup.sh` provisions the HAT's amp path as a root **socket-daemon** service
+(plan 2026-09-15-13-17-28, WS2):
 
 - **Binary:** `/usr/local/bin/hat-sound`, built from the tracked
   `tools/hat-sound.c` on every run (compare-then-install; an install
   restarts `gamepi-sound` onto the new binary).
-- **Unit:** `gamepi-sound.service` runs `hat-sound -i` (v3.5 idle mode):
-  acquires the amp pin (gpiochip0 line 37 = PB5, header pin 12), parks it
-  LOW, and `pause()`s until SIGTERM. That holds the pin **owned and silent at
-  boot** — no surprise sound, no tick clock, no CPU, no RT-budget spend.
-  `Restart=always` re-parks it if the process ever dies.
+- **Unit:** `gamepi-sound.service` runs
+  `hat-sound -d /run/gamepi-sound.sock` (v3.6 daemon mode): acquires the amp
+  pin (gpiochip0 line 37 = PB5, header pin 12) **once at start** and keeps
+  it owned for the process lifetime — LOW between jobs, released only on
+  exit. It binds `/run/gamepi-sound.sock` (0666, so **any user** can connect)
+  and serves PCM jobs **serialized on accept**: one client at a time, extras
+  block in `accept()`. Each job streams raw s16le 48 kHz mono into the
+  frozen v3.3 tick grid (192 kHz pin clock, OS 4, `SCHED_FIFO` 98 on core 1,
+  the signed re-anchor and pure-spin wait are byte-for-byte the frozen path).
+  The per-job self-report (source bytes, samples, effective Hz, real-time
+  multiple, underruns) goes to the **journal** — `journalctl -u
+  gamepi-sound` — since the daemon never opens the old `/run` stats file.
+  The socket sits directly in `/run` (tmpfs, wiped at boot); 0666 is set
+  engine-side (`fchmod(fd)` + `chmod(path)` — see the field finding in the
+  scope row above). No `RuntimeDirectory` in the unit. The socket is runtime
+  state, not managed content (verify row 12). Stop is clean: SIGTERM/SIGINT
+  are installed via `sigaction` **without `SA_RESTART`** (glibc's plain
+  `signal()` implies it, so an interrupted `accept()` would be silently
+  resumed and the stop never seen — the daemon got SIGKILLed after the full
+  `TimeoutStopSec` on its first stop) so the engine exits promptly from its
+  blocking `accept()` (pin released LOW, "daemon stopped — pin released LOW"
+  in the journal); `Restart=always` re-owns the pin and re-binds the socket
+  if the process dies.
 - **RT budget:** `kernel.sched_rt_runtime_us = -1` via
   `/etc/sysctl.d/99-sched-rt.conf` (applied by `systemd-sysctl` at every
   boot; the board has no `sysctl` binary). The default 950 ms/1 s RT
   bandwidth throttles the `SCHED_FIFO` tick loop and distorts playback;
   verify row 9 proves the runtime value.
-- **Playing is a manual act** (deliberately outside convergence):
-  1. `sudo systemctl stop gamepi-sound` — the pin is released LOW (silent)
-  2. `sudo /usr/local/bin/hat-sound -F <mono48k.s16>` — the RT parent feeds
-     the ring inline; the exit line self-reports the real-time ratio
-  3. `sudo systemctl start gamepi-sound` — the pin is re-parked
+- **Playing is now connecting to the socket** (v3.6): any user, e.g.
+  `python3 -c "import socket; s=socket.socket(socket.AF_UNIX,
+  socket.SOCK_STREAM); s.connect('/run/gamepi-sound.sock'); ..."` stream the
+  s16le data, half-close, done — the journal's per-job self-report is the
+  outcome. The stop/start dance of v3.5 is **retired as the normal play
+  path**; the manual one-shot player remains the **fallback** if the daemon
+  or pin is needed off the service (e.g. debugging):
+  1. `sudo systemctl stop gamepi-sound` — the daemon exits, unlinks the
+     socket, releases the pin LOW (silent)
+  2. `sudo /usr/local/bin/hat-sound -F <mono48k.s16>` — standalone; exit
+     line self-reports the real-time ratio
+  3. `sudo systemctl start gamepi-sound` — the daemon re-binds
+- **Flags:** v3.6 repurposes `-d` — it now takes a **socket path** (daemon),
+  and takes no source/tone args (combining them exits 2 with a clear error).
+  The old "`-d SEC` duration" moved to `--duration SEC` (`-t HZ
+  --duration 5` sets a tone's length; `-F FILE` / `-p` / `-i` are
+  unchanged). `-i` (idle pin hold) is kept as the rescue/service mode
+  inside the unit's restart path only; hand running it steals the pin
+  from the daemon.
 
 Stale audio-path overlays (`es8388-audio`, `i2c0`) are removed on every
 apply run: the HAT amplifier is GPIO/PWM, not I2S (verified 2026-09-15), so

@@ -108,7 +108,7 @@ slow per-process start, wrong trade for a 1 GB / 800 MHz-class A733 board).
 
 ## WS2 — v3.6 engine: socket daemon mode (first setup.sh change of the plan)
 
-- [ ] 2.1 `tools/hat-sound.c` v3.6: new `-d SOCKET` daemon mode —
+- [x] 2.1 `tools/hat-sound.c` v3.6: new `-d SOCKET` daemon mode —
       bind/connect the socket (0666, AF_UNIX), `accept` loop; per job:
       feeder reads s16le 48 kHz mono from the client fd (same inline-
       read pacing as file mode), EOF → drain → stats line (stderr →
@@ -117,28 +117,57 @@ slow per-process start, wrong trade for a 1 GB / 800 MHz-class A733 board).
       `-d` + any source/tone arg → usage error rc 2. Version strings v3.6,
       header note. Build zero warnings; local md5 recorded; NEVER hand an
       unrebuilt binary.
-- [ ] 2.2 `setup.sh`: unit `ExecStart=/usr/local/bin/hat-sound -d
-      /run/gamepi-sound.sock` + `RuntimeDirectory=gamepi-sound`
-      (RuntimeDirectory makes a 755 root dir — socket 0666 set by the
-      engine at bind; unit file stays root-owned, no User=).
+      DONE 2026-09-15: compiled `gcc -O2 -Wall -Wextra … -lm -lpthread`
+      zero warnings → scratch `/home/cj/hat-sound-v36-check` (first md5
+      `db3dfb0da675eaa5b68fad2e4d149717`, 982 lines src). Daemon block,
+      per-job feeder (CFS re-drop at entry), pin acquired once, `-i`
+      rescue path intact; `-d` + source/tone → rc 2; `--duration SEC`
+      replaces old `-d SEC`. Addendum 13:48: `socket_bind` gained
+      `chmod(path, 0666)` (live EACCES — bare `fchmod(fd)` never moves
+      the path-entry mode on this vendor kernel; isolated C test) →
+      md5 now `33f73667ab12ee866d9745eb04afcffe`, re-verified zero
+      warnings.
+- [x] 2.2 `setup.sh`: unit `ExecStart=/usr/local/bin/hat-sound -d
+      /run/gamepi-sound.sock`; the 0666 perms are set ENGINE-side
+      (`fchmod(fd)` + `chmod(path)` — the kernel-quirk addendum in 2.1),
+      so NO `RuntimeDirectory` (the socket sits directly in tmpfs /run;
+      the engine unlinks it on clean exit and re-unlinks a stale one at
+      bind). New verify row `sound-socket` (tmpfs → absent when the
+      daemon is stopped, so the row only passes with the daemon live).
       `docs/setup.md` SAME change: unit row, `/run/gamepi-sound.sock`
-      lifecycle row (transient, not managed content), "## Sound (v3.6)"
-      re-write (playback verbs; the stop/start dance is retired),
-      verify-matrix note for the new row in WS3.
-- [ ] 2.3 Local socket smoke test (no board): run `hat-sound -d
+      lifecycle row, "## Sound (v3.6)" re-write (stop/start dance
+      retired, kept as fallback only), verify-matrix row 12.
+      DONE 2026-09-15: unit flip + row + docs in one change; `bash -n`
+      OK; plan-mode unit-drift reporting is automatic (`write_if_changed`).
+- [x] 2.3 Local socket smoke test (no board): run `hat-sound -d
       /tmp/…sock` is NOT allowed (pin needs the board) → local check =
       compile + `--help` + dry parse only; board behavior is the gate.
-- [ ] 2.4 Live gate (operator): `--plan` → apply → apply. First apply
-      rewrites the unit, `systemctl restart gamepi-sound` (binary+unit
-      change path already in the script), unit re-activates idle-hold.
-      Manual device proof WITHOUT alsa yet: a ~10-line python client
-      (agent-provided, operator runs) sends 0.5 s 440 Hz s16le 48 kHz
-      over the socket; operator hears one tone; engine stats line in
-      `journalctl -u gamepi-sound` shows the job (frames, duty). Zero-
-      write second run. THEN commit (mandate satisfied by this apply→verify).
-- [ ] 2.5 Operator gate (ONE question): clean tone from the socket
+      DONE 2026-09-15 (re-run on the chmod-fixed md5): `--help` →
+      usage rc 2; `-d … -F -` → "daemon mode; takes no source or tone
+      args" rc 2; `-t 440 --duration 5` parses through to the expected
+      `open /dev/gpiochip0: Permission denied` (the board DOES have
+      gpiochip0 — it is root-gated); non-root daemon run also proved the
+      pin-fail path removes the just-bound socket (no stale file left).
+- [x] 2.4 Live gate (operator): first apply rewrite binary+unit (drift:2),
+      second apply zero writes, `sound-socket` verify row present and PASS.
+      Operator runs the 0.5 s 440 Hz python client; journal self-report
+      shows `job (v3.6 daemon) … 24000 samples, 47873.9 Hz, 1.00x
+      real-time, underruns 51`; `srw-rw-rw- root:root` on the socket.
+      Operator confirms clean tone ("clean 440 Hz tone").
+      DONE 2026-09-15: both applies, self-report, operator gate all
+      passed. Addendum: first stop of the daemon hit the 90 s
+      TimeoutStopSec and was SIGKILLed (glibc's plain signal() implies
+      SA_RESTART — the interrupted accept() was silently resumed) — fixed
+      with sigaction(SA_NODEFER, WITHOUT SA_RESTART) before commit;
+      re-applied binary+unit, second apply zero-writes CONVERGED.
+- [x] 2.5 Operator gate (ONE question): clean tone from the socket
       client → approve WS3. (Same audibility check as 1.5 but through the
       new engine path — the FROZEN tick path is exercised unchanged.)
+      DONE 2026-09-15: operator confirmed clean 440 Hz tone from the
+      python client; WS2 closed. Addendum: first daemon stop hit the
+      90 s timeout (glibc signal() implies SA_RESTART); fixed with
+      sigaction(SA_NODEFER, without SA_RESTART); re-deployed, second
+      apply CONVERGED.
 
 ## WS3 — the normal device: ALSA `hat` plugin + espeak-ng native output
 
