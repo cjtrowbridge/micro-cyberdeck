@@ -43,7 +43,7 @@ Yes, the parts list contains affiliate links.
 
 ## Recursive Self-Improvement Out Of The Box
 
-<img src="/projects/2026-09-09-micro-cyberdeck/vscode.jpg" class="full-width-image" alt="VSCode is running!" >  
+<img src="https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/vscode.jpg" class="full-width-image" alt="VSCode is running!" >  
 
 Because it’s now so easy to run models locally, and because this device has a powerful NPU built in, it can take over the work on itself essentially as soon as you flash Armbian and install your preferred agentic harness.
 
