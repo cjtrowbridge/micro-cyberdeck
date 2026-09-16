@@ -22,3 +22,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+
+# Built ALSA plugin artifact — keep the SOURCE (tools/hat_alsa_plugin.c),
+# not compiled .so files (build 2026-09-16: build-3 md5 33037e8e… is the
+# incident artifact — must not be installed; reinstall it by hand at 3.1r.3)
+libasound_module_pcm_hat.so

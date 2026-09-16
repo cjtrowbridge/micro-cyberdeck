@@ -1,9 +1,10 @@
 ---
 plan_id: 2026-09-15-13-17-28_hat-alsa-device-and-tts
 title: Make the HAT speaker play "like a normal sound device" (ALSA jury-rig) + fast TTS (espeak-ng)
-summary: Prove the speaker with real speech (espeak-ng, one-time gate), then integrate a root engine daemon (existing gamepi-sound unit, FROZEN tick path untouched) behind a thin user-space ALSA PCM plugin over a unix socket, so aplay / espeak-ng "text" work with no flags and no service stop/start; every setup.sh change documented in docs/setup.md in the same change and live apply->verify before each commit.
+summary: Prove the speaker with real speech (espeak-ng, one-time gate), then integrate a root engine daemon (existing gamepi-sound unit, FROZEN tick path untouched) behind a thin user-space ALSA PCM plugin over a unix socket, so aplay / espeak-ng "text" work with no flags and no service stop/start; every setup.sh change documented in docs/setup.md in the same change and live apply->verify before each commit. Rev 2026-09-16: WS3 v1 plugin built + live-tested and FAILED three ways (build 1 dlopen load-fail "snd_dlsym_start"; build 2 dump-fast ~0.024 s / 0.62x; build 3 wall-clock pacing bug -> 9-min solid-buzzer incident, aplay hot-spin 190% CPU, engine held one sample). Root cause: pointer() as sole backpressure with no bounded wait and no hard failure. Redesign (gated send-pacer, real drain, stop-closes, starve watchdog, offline pacing self-test BEFORE any pin) proposed after a reference-grounding audit of the 1.2.14 spin path + aplay loop — see journal 2026-09-16-hat-plugin-builds-audit-and-redesign.
 status: current
 created_at: 2026-09-15-13-17-28
+revised: 2026-09-16
 ---
 
 Key: `[ ]` pending task, `[x]` completed task, `[?]` needs validation, `[-]` closed task
@@ -27,10 +28,15 @@ slow per-process start, wrong trade for a 1 GB / 800 MHz-class A733 board).
   OS=4, SD_FS 8192, signed re-anchor, wait_deadline, RT setup). The engine's
   ONLY change is the feeder's input source (file fd → socket fd) plus a
   between-jobs loop that keeps the pin held for process lifetime.
-- No disassembly, no new I2S/DT-overlay work, no /tmp staging, USER runs all
-  sudo, commits as CJ Trowbridge, NEVER push. Mandate stands: every
-  `setup.sh`/provisioning change is documented in `docs/setup.md` in the same
-  change and passes live `apply -> verify` before commit.
+- No disassembly, no new I2S/DT-overlay work, USER runs all sudo, commits
+  as CJ Trowbridge. Push: originally "NEVER push" (local-only during the
+  bring-up period); **pushing to origin is operator-approved 2026-09-16**
+  (record: the "commit everything and push" instruction; main was 11 commits
+  / 0 behind → fast-forward push). Mandate stands: every `setup.sh`/
+  provisioning change is documented in `docs/setup.md` in the same change
+  and passes live `apply -> verify` before commit. (Note: the /tmp
+  build-staging constraint was relaxed for this arc — the pre-live .so
+  staging dir `/tmp/hatplug` is the documented scratch path for 3.1r.3.)
 
 ## Design decisions
 
@@ -171,24 +177,71 @@ slow per-process start, wrong trade for a 1 GB / 800 MHz-class A733 board).
 
 ## WS3 — the normal device: ALSA `hat` plugin + espeak-ng native output
 
-- [ ] 3.1 `tools/hat_alsa_plugin.c`: ALSA PCM plugin `.so` (canonical
-      `libasound_module_pcm_hat` naming + `_snd_pcm_create_hat`… per the
-      alsa-plugin howto; symbol prefix is the FIRST board-verified
-      unknown — 3.2's tiny client test is the discriminator):
-      ops = open (AF_UNIX connect to `/run/gamepi-sound.sock`, small
-      retry), info (S16_LE, 1 channel, 48000, period 1024, buffer 4096),
-      hw_params (fixed caps), writei/write (convert: linear resample →
-      48k, downmix → mono, blocking send with EPIPE/EOF → -EIO), close
-      (shutdown SHUT_WR → engine sees EOF), prepare/rewind/drop (no-op:
-      single-consumer stream), hw_free, poll (socket readable),
-      links (self). No pin, no RT, no engine code.
-- [ ] 3.2 Board probe (operator, one batch): build the .so straight from
-      the repo source into a scratch dir, drop a minimal
-      `pcm.hat { type hat; }` config, and run the smallest possible
-      client (`aplay -D hat -` fed 0.2 s 440 Hz) — verifies symbol naming,
-      plugin dir lookup, connect path before any setup.sh wiring. Debug
-      lever if load fails: run the client with `LD_DEBUG=libs` /
-      `ALSA_CONFIG_DIR` pointed at the scratch alsa.conf.
+- [?] 3.1 `tools/hat_alsa_plugin.c`: ALSA PCM plugin `.so`. WRITTEN,
+      BUILT, and LIVE-TESTED 2026-09-16 (593 lines, untracked). The v1
+      design premise FAILED three ways in sequence (journal
+      `2026-09-16-hat-plugin-builds-audit-and-redesign`):
+      - BUILD 1 (no `-DPIC`): dlopen (RTLD_NOW) REJECTED — undefined
+        `snd_dlsym_start`. `SND_DLSYM_BUILD_VERSION` without `-DPIC`
+        emits a constructor referencing that global, which the board's
+        PIC libasound does not export. Fixed with `-DPIC`.
+      - BUILD 2 (`-DPIC`; installed md5 `728c24565f58ca4b8371b6aac978faad`,
+        01:05): LOADED and drove the pin, but DUMPED FAST — a 2.445 s
+        file in 0.024 s; engine self-report `underruns 10953`, `0.62x`
+        effective / `29566 Hz` (38 % of ticks starved). Cause:
+        `hat_pointer()` returned `st->sent` (= accepted ~ appl) →
+        `avail ≡ buffer_size` always → the client never waits → the
+        whole file front-loads into the socket and the engine races to
+        drain.
+      - BUILD 3 (wall-clock consumption model; staged + repo-root
+        md5 `33037e8eec854c58b06392fddc251605`, 01:08): the pacing
+        BUG. Fixed-point `mass`/`drain` under-reports consumption
+        (carry in the CONSUMED compute — exact line pinned numerically
+        by the 3.1r.2 self-test, not by inspection), so every live job
+        stopped advancing at ~13–15 % of file → aplay's blocking
+        underrun path = -EPIPE instantly and forever → aplay hot-spun
+        at 190 % CPU in the EPIPE→recover→retry loop with NO timeout
+        for ~9 min, holding the socket open, while the FROZEN engine
+        fed the tick from an empty ring where `sample_next()` HOLDS THE
+        LAST SAMPLE (`tools/hat-sound.c:303-315`) → the sigma-delta
+        collapsed to a solid tone at that sample's duty
+        (`duty=57 %`, 25.5M underruns / 531.8 s) — the ~9-min buzzer,
+        ended only by killing aplay (socket close → engine EOF).
+      Root causes (mine, except the engine amplifier): (1) the
+      arithmetic under-report; (2) the DESIGN — `pointer()` was the
+      SOLE backpressure with no bounded wait and no hard failure, so
+      any estimate error became an unbounded held-sample tone; (3) the
+      procedure — pacing was validated live, not offline. The wall-clock
+      CONSUMPTION model is the wrong design even when correct: it
+      estimates engine pull from the socket (which never reports it),
+      puts steady-state latency at the full ~64 KiB send queue
+      (~0.5–0.77 s), and makes starve/stop invisible. FLAGGED:
+      superseded by the WS3-revision below (gated send-pacer, real
+      drain, stop-closes, starve watchdog, offline self-test); do NOT
+      wire v1 — and DO NOT install build 3 (md5 33037e8e…); the board
+      currently STILL LOADS the stale BUILD 2 (md5 728c2456…). Original
+      spec kept for reference: canonical `libasound_module_pcm_hat`
+      naming + the RESOLVED load contract — dlopen target
+      `_snd_pcm_hat_open` (T) + version marker
+      `__snd_pcm_hat_open_dlsym_pcm_001` (B), build flag `-DPIC` (see
+      BUILD 1); the "first board-verified unknown" is RESOLVED.
+      open (AF_UNIX connect to `/run/gamepi-sound.sock`, small retry),
+      info (S16_LE, 1ch, 48000, period 1024, buffer 4096), hw_params
+      (fixed caps), writei/write (resample → 48k, downmix → mono,
+      blocking send, EPIPE/EOF → -EIO), close (shutdown SHUT_WR →
+      engine sees EOF), prepare/rewind/drop no-op, hw_free, poll
+      (socket), links (self). No pin, no RT, no engine code.
+- [?] 3.2 Board v2-load check (REDUCED): the unknowns this step was
+      written to discriminate are ALREADY RESOLVED on-board (journal):
+      build 2 (md5 728c2456…) loaded from the stock plugin dir and
+      drove the pin, `aplay -L` listed `hat` from the 5-line
+      `/etc/asound.conf`, and the AF_UNIX connect path ran on every
+      live test. 3.2 is now just: after 3.1r.3, confirm the v2 .so
+      loads, `aplay -L` lists `hat`, and a 0.2 s 440 Hz plays — i.e. the
+      pre-check for 3.1r.4(a). Subsumed into that batch; no separate
+      operator ask expected. Load debug lever if needed:
+      `LD_DEBUG=libs` / `ALSA_CONFIG_DIR` pointed at a scratch
+      alsa.conf.
 - [ ] 3.3 `setup.sh`: second build step (compare-bytes → install into the
       alsa plugin dir, path derived from `pkg-config --variable=dir` with
       fallbacks `/usr/lib/alsa-lib`, `/usr/lib/x86_64-linux-gnu/alsa-
@@ -218,6 +271,98 @@ slow per-process start, wrong trade for a 1 GB / 800 MHz-class A733 board).
       and hears it** — ONE question: clean speech, no cracks? Commit
       (mandate satisfied by this apply→verify).
 
+## WS3-revision — plugin pacing redesign (PROPOSED 2026-09-16, pending operator approval)
+
+Trigger: plan-playbook step 6 — the 3.1 premise (thin pipe +
+wall-clock pointer is enough) failed THREE live builds, culminating in
+the 2026-09-16 incident: build 3's under-reporting `mass`/`drain`
+model made aplay hot-spin (190 % CPU) on perpetual -EPIPE for ~9 min
+while the engine held one sample at `duty=57 %` — and the reference
+audit of the pinned 1.2.14 spin path + aplay loop then showed the
+defect is the DESIGN (pointer as sole backpressure, no hard failure),
+not just the arithmetic (journal
+`2026-09-16-hat-plugin-builds-audit-and-redesign`, permanent record of
+the full arc: all three builds, the incident telemetry, root causes).
+On approval, 3.1r SUPERSEDES 3.1 (v1 source untracked; build 3's
+staged md5 33037e8e… must be retired, not installed) and 3.2..3.6
+continue except 3.2 is reduced (its unknowns are resolved) and 3.4's
+rows test the final .so. Design is grounded on the pinned 1.2.14 spin
+path — the plugin's `pointer()` IS the hardware pointer (hwsync →
+hw_ptr_update), the wait gate is pure `avail < avail_min`, and the
+wait is a pass-through poll of the plugin's `poll_fd`.
+
+- [ ] 3.1r.1 `tools/hat_alsa_plugin.c` REDESIGN (v2):
+  - **pointer** = gated send-side accounting: 48k frames ADVANCED
+    (accepted) are "consumed" at gate_time = send_time +
+    backlog_bytes/48 kHz (monotone; never exceeds accepted; -EIO on
+    transport death). No fixed-point carry in the hot path (that was
+    build 3's bug).
+  - **send gate**: before each send, if backlog > 0 and
+    (now-send_time)*48k/2 < backlog → `poll(POLLOUT, period_ms+200)` —
+    wakes at the same instant the framework's own wait would, so the
+    client only ever sees short writes exactly as aplay expects
+    (short/EAGAIN → `snd_pcm_wait(100)`), and `pointer` advances in
+    step with actual consumption.
+  - **SO_SNDBUF ≈ 16–32 KiB** (cap the worst-case backlog at ~250–410
+    ms instead of 667) — constant documented, tuned once live if needed.
+  - **real drain**: `drain` callback = blocking loop until
+    account says fully consumed (or 2× the remaining drain time), so
+    `snd_pcm_drain` (aplay's EOF path) waits for the actual tail instead
+    of returning when the model first says "empty"; framework drop →
+    `stop` → socket close stays the engine's EOF signal.
+  - **stop-closes** (hardening): `stop` closes the socket (fresh job on
+    every `start`); removes any last-hw/state residue between streams.
+  - **starve watchdog**: engine accepts but does not consume for > X ms
+    (X ≈ 5 × period, tunable) → `dead` = 1 → `pointer` = -EIO → clean
+    XRUN → aplay `snd_pcm_prepare` → lazy reconnect (fresh job). No
+    more silent stalls.
+  - Reuse from v1: resampler (identity/up/down, cross-chunk carry),
+    downmix, param lists, `prepare` reset, `close` frees, `dump`,
+    connect/lazy-connect idempotency, `reinit_status` at connect/close.
+  - Build zero warnings; md5 recorded; stage to /tmp/hatplug (scratch).
+- [ ] 3.1r.2 `tools/hat_pace_selftest.c` (tracked): deterministic
+  pacing check with NO GPIO and NO engine — a fake "engine" thread with
+  a known 85 ms in-kernel-equivalent delay pulls from its end of the
+  socket pair at fixed 48 kHz pace; driver opens the plugin via
+  `snd_pcm_open("hat", …)` with `hat_path` pointed at the pair, plays a
+  generated pattern via the same writei/wait/EPIPE-prepare loop aplay
+  uses, and asserts: total wall time within ±10% of pattern duration;
+  no pointer going backwards; XRUN never fires in healthy mode; the
+  starve-watchdog mode (fake engine stops pulling) DOES fire -EIO →
+  XRUN within X ms. FIRST JOB of this harness: numerically reproduce
+  build 3's fixed-point `mass`/`drain` under-report — trace the carry
+  in the CONSUMED compute, pin the exact line that drops consumption —
+  and show the harness catches it (RED on the buggy model, GREEN on the
+  gated model), so the incident's trigger is proven on the desktop
+  before it is trusted. Green = pacing contract proven without the
+  board. Build + run green on this machine (workspace == board)
+  BEFORE 3.2.
+  - [ ] 3.1r.3 Rebuild .so from v2 source, verify symbols —
+  `_snd_pcm_hat_open` (T) + version marker
+  `__snd_pcm_hat_open_dlsym_pcm_001` (B), NO `snd_dlsym_start` refs,
+  built with `-DPIC` (mandatory; see 3.1's BUILD 1) — + load under
+  `ALSA_CONFIG_DIR` pointed at /tmp/hatplug (nm/objdump in scratch);
+  re-stage /tmp/hatplug/libasound_module_pcm_hat.so; RETIRE the
+  build-3 artifact (md5 33037e8e…, the buzzer build) — it must NOT be
+  installed.
+- [ ] 3.1r.4 Timeout-gated live batch for the operator (ONE ask,
+  ~3 min cap each, auto-Ctrl-C semantics documented in the batch):
+  (a) `aplay -D hat` ~2 s generated tone → elapsed ≈ 2 s (the pacing
+  gate — build 2 failed it by dumping in 0.024 s; build 3 failed it by
+  stalling at ~15 % → the 9-min buzzer); (b) espeak-ng sentence → gap
+  between sentences ≈ voice-end-to-start (no ~3 s dead air); (c) kill
+  the
+  daemon mid-play (sudo in the batch) → aplay recovers to XRUN/reconnect
+  OR exits cleanly with no hang; daemon restarted by systemd. Gated: if
+  (a) is off by >±15% we stop and re-tune the gate before (b)/(c).
+  ONE question on pass: clean, on-time speech?
+- On approval: 3.2 is now a trivial v2-load check (symbol naming /
+  plugin dir / connect path are already resolved on-board by builds
+  2/3 — see journal) and subsumes into the 3.1r.4 batch as its
+  pre-check; 3.3/3.4/3.5 proceed as written (setup.sh installs the v2
+  source — 3.3 preflight checks `tools/hat_alsa_plugin.c`; nothing else
+  changes); 3.6 gate unchanged.
+
 ## WS4 — polish + closeout
 
 - [ ] 4.1 `docs/setup.md` + journal: final state block (device verbs,
@@ -237,9 +382,32 @@ slow per-process start, wrong trade for a 1 GB / 800 MHz-class A733 board).
 
 ## Failure modes (known, with the in-plan response)
 
-- Plugin symbol naming / plugin dir lookup → 3.2's scratch build +
-  `LD_DEBUG=libs` probe BEFORE any setup wiring; fallback = ALSA `shm`
-  protocol (decision 7); engine/socket (WS2) remains fully useful alone.
+- Plugin symbol naming / plugin dir lookup → RESOLVED on-board by this
+  arc (journal): the load target is `_snd_pcm_hat_open` (+ version
+  marker); the build MUST use `-DPIC` (without it, the
+  `SND_DLSYM_BUILD_VERSION` macro emits a constructor referencing
+  `snd_dlsym_start`, unexported by the board's PIC libasound →
+  RTLD_NOW load fails — that was BUILD 1). Plugin dir is the stock
+  `/usr/lib/aarch64-linux-gnu/alsa-lib` (build 2 loaded + listed
+  there). Fallback = ALSA `shm` protocol (decision 7) still stands.
+- Stuck / confused client holding the pin open (THE incident) → a
+  client that stops advancing while the connection stays open makes the
+  engine feed the tick loop from an empty ring, where `sample_next()`
+  HOLDS THE LAST SAMPLE (`tools/hat-sound.c:303-315`) and the
+  sigma-delta collapses to a solid tone at that sample's duty (the
+  ~9-min `duty=57 %` buzzer; only a socket close = engine EOF stops it).
+  Frozen engine behavior; in-plan response = the v2 **starve watchdog**
+  (engine accepts but consumes nothing > 5×period → `dead` → `pointer`
+  = -EIO → clean XRUN → aplay prepare/reconnect) + **stop-closes** +
+  the **real drain**. Future optional (WS4, not this revision): a
+  user-run "socket guardian" that closes client connections idle
+  > N s — no engine/wire/tick change.
+- No-unbounded-live-run discipline (the procedural fix for the
+  incident): every live `aplay` wrapped in `timeout`, engine
+  `underruns` + `pgrep aplay` + the socket checked within seconds of
+  each test, any stall → immediate kill + journal before retry, and the
+  offline self-test (3.1r.2) explains any P0 before a live rerun.
+  Never again an unbounded `time aplay` against the pin.
 - Client dies mid-stream → engine: `send`/`recv` EPIPE/ECONNRESET and
   read-EOF treated as job end (pin parked LOW, next accept); `aplay`
   itself exits on engine death; `Restart=always` covers engine crashes.
@@ -261,4 +429,8 @@ WS2: revert commit + one apply restores `-i` ExecStart (unit converges).
 WS3: revert + apply removes plugin/asound.conf (the revert's setup.sh no
 longer manages them — one manual `rm /etc/asound.conf` + `rm` of the .so
 per the docs rollback note) and verify rows. Board state after rollback
-= exactly today's converged state.
+= exactly today's converged state. WS3-revision: nothing installed on
+the board yet (v1/v2 .so are untracked scratch in /tmp/hatplug + the
+repo root until 3.3 lands) → rollback = delete the untracked files;
+if the revision is rejected, 3.1 stays `[?]` and the journal records
+the deferral (no engine, no setup.sh, no board change in the interim).
