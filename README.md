@@ -7,17 +7,17 @@ The micro cyberdeck is a full arm64 computer in the palm of your hand. With simi
 
 ## Why
 
-<img src="https://cjtrowbrdige.com/projects/2026-09-09-micro-cyberdeck/kit.jpg" class="full-width-photo" alt="Current travel kit with pwnagotchi, Flipper Zero, new micro-cyberdeck (with quarter for size comparison), HackRF Portapack H4M, and uConsole">
+<img src="https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/kit.jpg" class="full-width-photo" alt="Current travel kit with pwnagotchi, Flipper Zero, new micro-cyberdeck (with quarter for size comparison), HackRF Portapack H4M, and uConsole">
 
 For me, having a tiny, powerful, AI-capable device as part of my travel kit is going to be immensely helpful. This will be a huge improvement over the uConsole which is enormous and comparatively far less powerful. 
 
 I know what you're thinking, and yes all of these devices talk to each other! Having the AI on the micro-cyberdeck be able to integrate with the other tools and operate them is a big part of the motivation for this project.
 
-<img src="https://cjtrowbrdige.com/projects/2026-09-09-micro-cyberdeck/reduced-kit.jpg" class="full-width-photo" alt="Current travel kit with pwnagotchi, Flipper Zero, HackRF Portapack H4M, and new micro-cyberdeck">
+<img src="https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/reduced-kit.jpg" class="full-width-photo" alt="Current travel kit with pwnagotchi, Flipper Zero, HackRF Portapack H4M, and new micro-cyberdeck">
 
 You can see in the second photo what a difference this makes, not just because it's much smaller and easier to pack but also because the micro-cyberdeck is far more powerful than the uConsole.
 
-<img src="https://cjtrowbrdige.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-early-draft-case.jpg" class="full-width-photo" alt="Early draft case design showing bash terminal on screen and keypads to both sides" ><br>
+<img src="https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-early-draft-case.jpg" class="full-width-photo" alt="Early draft case design showing bash terminal on screen and keypads to both sides" ><br>
 ***This is an early draft case design with the screen showing a bash terminal window, and the keypads on both sides of the screen. All my case designs are available for free in the link at the bottom.***
 
 ## The Capabilities
@@ -31,7 +31,7 @@ It has a 1.54" x 1.54" 240x240 screen, a speaker, a headphone jack, a bunch of b
 AND, you can plug this into any USB-C docking station and essentially have a full working desktop machine with a normal monitor, keyboard, and mouse. It even supports a full desktop GPU through the PCI-E-3 port.
 
 
-<img src="https://cjtrowbrdige.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-side.jpg" class="full-width-photo" alt="Micro Cyberdeck Side View" >
+<img src="https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/micro-cyberdeck-side.jpg" class="full-width-photo" alt="Micro Cyberdeck Side View" >
 
 
 ## Parts List
@@ -54,7 +54,7 @@ AND, you can plug this into any USB-C docking station and essentially have a ful
 
 ## Recursive Self-Improvement Out Of The Box
 
-<img src="https://cjtrowbrdige.com/projects/2026-09-09-micro-cyberdeck/vscode.jpg" class="full-width-image" alt="VSCode is running!" >  
+<img src="https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/vscode.jpg" class="full-width-image" alt="VSCode is running!" >  
 
 Because it’s now so easy to run models locally, and because this device has a powerful NPU built in, it can take over the work on itself essentially as soon as you flash Armbian and install your preferred agentic harness.
 
