@@ -1,0 +1,61 @@
+# Device Hardware Records
+
+One evidence-first file per part of the deck — every row of the
+**[Hardware Status](../../README.md#hardware-status)** "On the deck" table in
+the README links to its record here. The README table is the at-a-glance
+tracker; these files carry the detail: **what we know**, **how we know it**
+(concrete evidence: re-probe commands, `setup.sh` verify rows, journal/plan
+links, binary md5s), and **what it portends** (implications, next steps, what
+is blocked on each part).
+
+## Format (every file follows this)
+
+1. **Status** — mirrored from the README table. Controlled vocabulary:
+   `Done` · `In progress — paused` · `Partial` · `Not started` · `Automatic` ·
+   `Unused (by design)` · `Idea`.
+2. **What it is** — the part and its role in the deck.
+3. **What we know** — claims, each backed by the evidence section.
+4. **How we know** — re-probe commands an agent can run bare (no sudo where
+   noted), which `setup.sh` verify row covers it, journal/plan citations,
+   binary identity (md5) where a firmware-adjacent binary is involved.
+   Kernel probe logs (`dmesg` / `/var/log/kern.log`) need the operator.
+5. **What it portends** — implications, next steps, gating, open questions.
+
+## Standing rule
+
+**Any new research on any part of the device** — a probe, a measurement, a
+journal finding, a fix that landed — **must update the relevant file here in
+the same change**, and flip the README row if the status moved. If the part is
+not documented yet (e.g. an expansion idea turning into a real plan, or a newly
+discovered peripheral), create its doc and add the README row in the same
+change.
+
+## Index (On the deck)
+
+| Part | Record | Status |
+|---|---|---|
+| Display — ST7789 240×240 (SPI3) | [display-st7789.md](display-st7789.md) | Done |
+| Screen touch (gt9271) | [touch-gt9271.md](touch-gt9271.md) | Not started |
+| Speaker (HAT amp) | [speaker-hat-amp.md](speaker-hat-amp.md) | Done |
+| Audio as a normal device | [audio-normal-device.md](audio-normal-device.md) | In progress — paused |
+| Headphone jack | [headphone-jack.md](headphone-jack.md) | Partial |
+| Membrane key buttons (13) | [membrane-buttons.md](membrane-buttons.md) | Not started |
+| Power button (PMIC key) | [power-button.md](power-button.md) | Done |
+| Battery (11.1 Wh LiPo) | [battery.md](battery.md) | Not started |
+| Power path (USB-C / HAT microUSB / battery) | [power-path.md](power-path.md) | Not started |
+| PMIC (AXP8191 rails) | [pmic-axp8191.md](pmic-axp8191.md) | Partial |
+| SoC temperature (CPU/DDR/GPU/NPU) | [soc-thermal.md](soc-thermal.md) | Done |
+| Fan | [fan.md](fan.md) | Partial |
+| RTC (hym8563) | [rtc-hym8563.md](rtc-hym8563.md) | Not started |
+| USB-C power negotiation (fusb302/TCPM) | [usbc-power.md](usbc-power.md) | Automatic |
+| NPU (3 TOPS INT8) | [npu.md](npu.md) | Not started |
+| HDMI audio card | [hdmi-audio.md](hdmi-audio.md) | Unused (by design) |
+
+**Expansion ideas** (the other table in the README) have no records yet — they
+carry no known device state. When one is planned, create its doc and link it
+from the expansion row.
+
+**Verification baseline:** all live evidence below was probed on the board
+during the September 2026 sessions (the journals dated 2026-09-14 through
+2026-09-16 are the primary written record). Re-run the per-file re-probe
+commands to confirm before relying on a claim.

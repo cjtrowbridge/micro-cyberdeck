@@ -30,6 +30,20 @@ never overwrites host-owned content during bootstrap or updates.
   documented in `docs/setup.md` in the same change (the script header carries
   the same mandate and links here), and must pass `apply -> verify` on a live
   board before the change is committed.
+- `docs/hardware/` — the device hardware records: one evidence-first file per
+  part of the deck (display, touch, speaker, ALSA audio, buttons, battery,
+  PMIC, power path, thermal, fan, NPU, …), indexed by
+  `docs/hardware/README.md` and linked row-by-row from the README's
+  **Hardware Status** table. Each record states what is known, **how we know
+  it** (re-probe sysfs paths, `setup.sh` verify rows, journal/plan citations,
+  binary md5s), and what it portends. **MANDATE:** any new research on any
+  part of the device — a probe, a measurement, a journal finding, a fix that
+  landed — must update the relevant `docs/hardware/` record in the same
+  change, and the README **Hardware Status** row if the part's status moved.
+  A part with no record yet gets one (plus a README row, if it has none) in
+  the same change. The kernel boot log (`dmesg`/`/var/log/kern.log`) and
+  `i2c-dev` nodes are root-only on this board — cite them as operator-level
+  evidence, and never brute-force register writes against the live PMIC.
 - `api.sample.yaml` — tracked local-inference template. Copy it to the ignored
   `api.yaml` and supply local values; never commit `api.yaml`.
 - `pipeline.yaml` / `prompts/` — host pipeline definition and customized runtime

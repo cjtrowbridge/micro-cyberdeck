@@ -52,6 +52,57 @@ AND, you can plug this into any USB-C docking station and essentially have a ful
 - I recommend running [Armbian](https://armbian.com/boards/orangepizero3w) instead of the sketchy OEM image. This is a brand new board so support is still a work in progress. Don't expect everything to be perfect yet, or ever. But my experience has been good so far.
 
 
+## Hardware Status
+
+The persistent progress tracker for every peripheral on the deck — the
+HAT, the SBC silicon, and the expansion ideas. When work lands, update
+the row (and the journal/plan it links to) so this table stays the
+single source of truth for **what works**.
+
+Every part has a detailed record under
+[docs/hardware/](docs/hardware/) — what is known, **how we know it**
+(re-probe evidence), and what it portends. **Mandate: any new research on any
+part of the device — a probe, a measurement, a journal finding, a fix that
+landed — must update the relevant `docs/hardware/` record, and this row if the
+status moved, in the same change.** If a part has no record yet, create it (and
+the row, if it has none) in the same change.
+
+### On the deck
+
+| Component | Status | Record | Notes |
+|---|---|---|---|
+| Display — ST7789 240x240 (SPI3) | **Done** | [doc](docs/hardware/display-st7789.md) | provisioned by `setup.sh`; the bridge scales the 960x960 desktop down to the 240x240 panel |
+| Screen touch (gt9271) | **Not started** | [doc](docs/hardware/touch-gt9271.md) | controller on the I2C bus, driver not bound yet, no input device |
+| Speaker (HAT amp) | **Done** | [doc](docs/hardware/speaker-hat-amp.md) | custom `hat-sound` engine (1-bit sigma-delta, real-time) under the `gamepi-sound` service; TTS via `espeak-ng` |
+| Audio as a normal device | **In progress — paused** | [doc](docs/hardware/audio-normal-device.md) | ALSA plugin so `aplay`/`espeak-ng` work with no flags; 48 kHz verified, a 22.05 kHz stall is under classification ([plan](plans/future/2026-09-15-13-17-28_hat-alsa-device-and-tts.md)) |
+| Headphone jack | **Partial** | [doc](docs/hardware/headphone-jack.md) | shares the speaker's amp path — inherits its status, never tested on its own |
+| Membrane key buttons (13) | **Not started** | [doc](docs/hardware/membrane-buttons.md) | `button-map.py` (on the board) resolves the pinmap, then a `gpio-keys` overlay joins `setup.sh` ([design note](journal/2026-09-15-hat-audio-v3.3-status.md)) |
+| Power button (PMIC key) | **Done** | [doc](docs/hardware/power-button.md) | the `axp8191` PEK (power key) is a kernel input device → `/dev/input/event0` |
+| Battery (11.1 Wh LiPo) | **Not started** | [doc](docs/hardware/battery.md) | charge circuitry is in the PMIC, but battery voltage / charge state is not exposed to Linux (no fuel gauge, no `power_supply` battery node) — without an ADC readout we can't tell charging from draining, or estimate the ~14 h life in practice |
+| Power path (USB-C / HAT microUSB / battery) | **Not started** | [doc](docs/hardware/power-path.md) | device runs on the HAT's microUSB today, which feeds the PMIC's charge path; the SBC's own USB-C port (fUSB302 PD chip) is a separate input whose interaction with the HAT path is untested; the PD PSU stub reports 0. Measuring any of it (charge current, input voltage) depends on the battery-ADC work above |
+| PMIC (AXP8191 rails) | **Partial** | [doc](docs/hardware/pmic-axp8191.md) | ~40 regulator rails power the board (SoC, NPU, UFS/PCIe, HDMI, fan, i2c…); the driver exposes names only — no live voltages; the companion `axp515` chip on the same bus is probed but inert |
+| SoC temperature (CPU/DDR/GPU/NPU) | **Done** | [doc](docs/hardware/soc-thermal.md) | the SoC's own thermal sensors via `thermal_zone*`; distinct from the PMIC's internal `temp-ctrl`, which is present but not exposed |
+| Fan | **Partial** | [doc](docs/hardware/fan.md) | onboard `pwmfan` driver is present but at 0% with no thermal policy; the tiny onboard fan is underpowered, and the printed case runs a full-size 40 mm fan at constant speed — goal: fan control, ideally PWM (drive the 40 mm fan's PWM input from a free SBC GPIO over the header, verify 3.3 V logic level and the 5 V power feed, use the tach wire for RPM feedback, and add a thermal trip policy) |
+| RTC (hym8563) | **Not started** | [doc](docs/hardware/rtc-hym8563.md) | on the I2C bus, unbound; NTP stands in for now |
+| USB-C power negotiation (fusb302/TCPM) | **Automatic** | [doc](docs/hardware/usbc-power.md) | kernel USB-source stub only; no user-visible feature |
+| NPU (3 TOPS INT8) | **Not started** | [doc](docs/hardware/npu.md) | no driver/SDK work yet |
+| HDMI audio card | **Unused (by design)** | [doc](docs/hardware/hdmi-audio.md) | there for an external monitor's sound; deck audio is the HAT amp |
+
+### Expansion ideas
+
+All of these are possible today by plugging an external device into the
+ports; the goal is to fit them into the micro form-factor. These carry no
+per-device records yet — when one is planned, create its
+[docs/hardware](docs/hardware/) file and link it here.
+
+| Idea | Status | Notes |
+|---|---|---|
+| PCI-3 SSD or AI accelerator (e.g. LLM8850) | **Idea** | no NVMe-capable hat in this form factor yet |
+| Zero-form USB + ethernet HAT | **Idea** | existing hats need a micro-USB power lead this board can't take |
+| Software-defined radio (CaribouLite-style) | **Idea** | no longer available in a usable form factor |
+| Meshtastic | **Idea** | no zero-form HAT found yet |
+
+
 ## Recursive Self-Improvement Out Of The Box
 
 <img src="https://cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/vscode.jpg" class="full-width-image" alt="VSCode is running!" >  
@@ -65,13 +116,14 @@ My plan is to use my [ebe pipeline](https://github.com/cjtrowbridge/ebe-boilerpl
 Here you can see she has vs code open and she is working on herself. Hopefully she will be able to figure out these unresolved issues without much help from me. 💅
 
 ### Known Unresolved Issues
-- I am still working on getting the built-in speaker and keypads working
+
+(peripheral-level status is tracked in [Hardware Status](#hardware-status) above — only the non-peripheral items remain here)
+
 - Testing [case designs](https://github.com/cjtrowbridge/vibe-modeling/tree/main/output/micro_cyberdeck_case) with better thermal management because the little fan struggles to keep up by itself and I want to keep the battery insulated from the SBC's heat
 - Testing [manufacturer's recommended ROMs](https://spotpear.com/wiki/Raspberry-Pi-Game-1.54inch-LCD-touchscreen-display-ST7789.html)
 - Getting steam/proton working
 - Building voice-interactive local agent software
   - Integrating with peripherals like Flipper Zero and pwnagotchi
-- It seems like there is a way to get the SBC to be aware of the battery's charge status but I haven't figured that out yet
 
 ## Setup
 
@@ -96,29 +148,6 @@ sudo bash setup.sh
 - If the board is stuck in one of the two known broken 480-mode states, the
   one-time rescue scripts `apply-960.sh` / `revert-480.sh` cover it; anything
   else is a fresh flash + `setup.sh`.
-
-### Future Opportunities
-
-All of these things are currently possible by simply plugging external devices into the ports, but I'd like to fit these capabilites into the micro form-factor.
-
-#### PCI-3 Expansion
-
-I think the biggest long-term opportunity is to take advantage of the PCI-3 port by adding some kind of more powerful SSD or AI Accelerator (Like the LLM8850 which is out of stock everywhere).
-
-The big problem with both of these options is that there isn't any nvme hat that fits this board at this point.
-
-#### Peripheral Ports
-
-There are [some hats](https://www.crowdsupply.com/cariboulabs/cariboulite-rpi-hat) for Pi Zero that give you a few usb ports and an ethernet port, but they all need a micro usb connection to the pi which is not possible with this pi. It seems unlikely that this will ever be resolved since this is a small batch SBC, but it would be cool to see that someday.
-
-#### Software-Defined Radio
-
-It would be awesome to find something like a [CaribouLite](https://www.crowdsupply.com/cariboulabs/cariboulite-rpi-hat) in the zero form factor, but these are also no longer available.
-
-#### Meshtastic
-
-I haven't been able to find a meshtastic hat for the zero form factor, but it would be cool to add one someday.
-
 
 ### More Resources
 
