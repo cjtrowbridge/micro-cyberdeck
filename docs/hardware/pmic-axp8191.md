@@ -4,11 +4,13 @@
 
 ## What it is
 
-The board's power-management IC. The deck's active PMIC is an **AXP8191**,
+The SBC's power-management IC. The SBC's active PMIC is an **AXP8191**,
 plus a companion/secondary chip the kernel presents as an **AXP515** on the
 same bus. The PMIC provides the board's regulated power rails and, as a side
 effect, the hardware backing for the [power-button.md](power-button.md)
 device.
+The GamePi HAT also has a local power circuit near its battery connector;
+its connection to these SBC PMICs is not established.
 
 ## What we know
 
@@ -20,9 +22,8 @@ device.
   - **`axp515` @ `0x34`** — probed at boot (`waiting_for_supplier=0`, i.e.
     the probe ran and completed) but **inert**: no useful sysfs output of its
     own beyond the probe itself. (Its exact role, and whether it's the chip
-    that actually carries the battery-ADC the
-    [battery.md](battery.md) row wants, is an open question — resolving it
-    needs the operator chip-ID read described there.)
+    that exposes a battery ADC, is an open question. Even if it does, its
+    connection to the HAT cell is unproven; see [battery.md](battery.md).)
 - **The rails:** the `axp8191` node exposes roughly **40** regulator rails —
   `dcdc1`–`dcdc9`, `dc1sw1`/`dc1sw2`, `aldo1`–`aldo6`, `bl_do1`–`bl_do5` (LED
   boost), `cldo1`–`cldo5`, `dl_do1`–`dl_do6`, `eldo1`–`eldo6`, `rtc_ldo`, and
@@ -41,6 +42,12 @@ device.
   sysfs entry** for it today; nothing reads it.
 
 ## How we know
+
+- [HAT underside overview](images/PXL_20260917_070632106.jpg) and
+  [battery connector close-up](images/PXL_20260917_070648424.jpg)
+  (2026-09-17) show a separate eight-pin IC and `4R7` inductor on the HAT.
+  No marking or visible trace in these images ties this circuit to either
+  SBC I2C address.
 
 - Live probes (September 2026 session, no sudo for any of these — the
   sysfs attributes are world-readable):
@@ -66,8 +73,9 @@ device.
 - **This is the umbrella row behind two of the deck's other open rows:**
   [battery.md](battery.md) (charge/ADC visibility) and
   [usbc-power.md](usbc-power.md) (why the SBC's own port reads all zeros).
-  Both are ultimately "the PMIC driver isn't giving Linux what the hardware
-  is capable of" — getting either one to work starts here.
+  The PMIC driver does not expose its full telemetry, but its relevance to
+  the HAT battery remains unproven. Trace the HAT power path before treating
+  an SBC PMIC driver change as the battery fix.
 - **No live-voltage telemetry means no "is a rail sagging under load"
   diagnostics** available for when a future performance/tuning pass (NPU
   inference load, GPU workload) starts behaving oddly — a gap, not a bug,

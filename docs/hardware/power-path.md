@@ -7,15 +7,15 @@
 The routing of electrical power into the board: two USB inputs (the SBC's own
 USB-C port, with its fUSB302 PD chip — see [usbc-power.md](usbc-power.md) —
 and the HAT's own microUSB port), and the battery (see
-[battery.md](battery.md)), all arbitrated by the PMIC (see
-[pmic-axp8191.md](pmic-axp8191.md)).
+[battery.md](battery.md)). The relationship between the HAT's local power
+circuit and the SBC's [AXP8191 PMIC](pmic-axp8191.md) has not been traced.
 
 ## What we know
 
 - **Today's actual configuration:** the deck is powered from the **HAT's
-  microUSB** port; that feed goes into the PMIC's charge/adapter path (the
-  same circuitry that would charge the battery, see
-  [battery.md](battery.md)).
+  microUSB** port. The HAT carries a separate eight-pin IC beside the cell
+  connector and `4R7` inductor. Which IC controls charging and which node
+  feeds the SBC remain to be established (see [battery.md](battery.md)).
 - **The SBC's own USB-C port is a separate input**, negotiated by the fUSB302
   over its I2C/TCPM path — but the kernel's power-supply stub for it reports
   `in0_input=0`, `curr1_input=0`, all-empty properties (see
@@ -29,12 +29,18 @@ and the HAT's own microUSB port), and the battery (see
   - Whether the SBC-side USB-C alone can power the whole board + HAT at a
     level the board actually accepts (no measurement has been taken with the
     HAT microUSB unplugged and only the SBC USB-C connected).
-- Because all of this is governed by the PMIC's charge-path registers, and
-  that chip is not measured/exposed to Linux today (see
-  [battery.md](battery.md)), **none of this is observable from the OS
-  without the battery-ADC work landing first.**
+- The HAT's charging and source-selection circuitry has not yet been
+  identified. The current Linux power-supply nodes provide no battery
+  telemetry (see [battery.md](battery.md)); a PMIC driver change will only
+  help if the relevant HAT signals reach that PMIC.
 
 ## How we know
+
+- [HAT underside overview](images/PXL_20260917_070632106.jpg) and
+  [battery connector close-up](images/PXL_20260917_070648424.jpg)
+  (2026-09-17) show the HAT's microUSB input, battery connector, eight-pin
+  IC and inductor. They do not show the internal nets or source-selection
+  behavior.
 
 - The "powered from the HAT microUSB" fact is observed directly (the cable
   that keeps the deck running is the HAT's, not the SBC's) — this is
@@ -49,13 +55,13 @@ and the HAT's own microUSB port), and the battery (see
 
 ## What it portends
 
-- **Proposed test matrix (blocked on the battery-ADC work):** run the deck
+- **Proposed test matrix (requires battery and input measurements):** run the deck
   in three configurations — (a) HAT microUSB only (the status quo), (b) SBC
   USB-C only, (c) both — and record, for each: input voltage/current on each
   port, battery current (charging vs. not), and whether the board stays up
   under a nominal game workload. This is the concrete "does the SBC's own
-  port actually work as a power source" answer, and it's the same
-  measurement capability [battery.md](battery.md) is gated on.
+  port actually work as a power source" answer. A bench meter may be needed
+  if the HAT cell has no software-readable monitor.
 - Until that matrix is run, the safe assumption is **the HAT's microUSB is
   the only verified power source** and any deployment instructions (e.g. "just
   plug in the SBC's USB-C") should not be written on the strength of this

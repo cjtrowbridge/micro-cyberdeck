@@ -11,6 +11,12 @@ a 1-bit sigma-delta bitstream to that pin from a real-time process.
 
 ## What we know
 
+- **Physical amplifier identified (2026-09-17):** the eight-pin package
+  beside the speaker is marked `NS8002`. Nsiway's
+  [NS8002 product description](https://www.chipsourcetek.com/Audio-Chip/2152.html)
+  identifies it as a mono Class AB bridge audio amplifier. This identifies
+  the HAT's amplifier IC, not the upstream audio source or its wiring.
+
 - **Wrong path already ruled out (and kept ruled out):** an `es8388-audio`
   DT overlay with I2S probe was tried earlier and bound nothing — the HAT
   codec simply is not an I²S codec. `setup.sh` removes any stale
@@ -52,6 +58,11 @@ a 1-bit sigma-delta bitstream to that pin from a real-time process.
   service, so the running daemon is always the installed binary.
 
 ## How we know
+
+- [HAT underside overview](images/PXL_20260917_070632106.jpg): the `NS8002`
+  marking is visible beside the speaker; the adjacent package and wiring
+  place it in the HAT's audio section. The manufacturer's product description
+  identifies the part's function.
 
 - Re-probe (mostly no sudo): `md5sum /usr/local/bin/hat-sound` (expect
   `6b7b9ea18c5ac3560132eb5f3d0a4008`); `test -S /run/gamepi-sound.sock && ls

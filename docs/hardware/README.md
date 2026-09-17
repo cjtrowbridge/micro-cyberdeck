@@ -30,6 +30,20 @@ not documented yet (e.g. an expansion idea turning into a real plan, or a newly
 discovered peripheral), create its doc and add the README row in the same
 change.
 
+## HAT underside photos (2026-09-17)
+
+- [Full underside view](images/PXL_20260917_070632106.jpg)
+- [Lower section, including speaker and headphone jack](images/PXL_20260917_070641017.jpg)
+- [Battery connector and upper power section](images/PXL_20260917_070648424.jpg)
+
+These are original-resolution operator photos. The visible `NS8002` marking
+identifies the speaker amplifier (see [speaker-hat-amp.md](speaker-hat-amp.md)).
+The marking on the eight-pin IC next to the `4R7` inductor is still uncertain;
+its role and connection to the SBC PMIC are open (see
+[battery.md](battery.md) and [power-path.md](power-path.md)). The larger IC
+at the opposite corner is visible but its marking is not reliably legible in
+these views, so no part number has been assigned.
+
 ## Index (On the deck)
 
 | Part | Record | Status |

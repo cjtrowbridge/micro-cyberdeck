@@ -4,10 +4,10 @@
 
 ## What it is
 
-The deck's 11.1 Wh LiPo, connected to the PMIC's battery charge/discharge
-path (see [pmic-axp8191.md](pmic-axp8191.md) for the charge circuitry, and
-[power-path.md](power-path.md) for where it sits relative to the two USB
-inputs).
+The deck's 11.1 Wh LiPo, plugged into the GamePi HAT's two-pin battery
+connector. The exact charge/discharge circuit and its relationship to the
+SBC's [AXP8191](pmic-axp8191.md) remain untraced; see
+[power-path.md](power-path.md) for the two USB inputs.
 
 ## What we know
 
@@ -24,17 +24,29 @@ inputs).
   - So there is no `capacity`, no `voltage_now`, no `status`
     (charging/discharging) available to the OS: **you cannot tell from a
     running system whether the battery is charging, discharging, or full.**
-- **Why:** the AXP8191 has an **on-chip ADC with dedicated VBUS/ACIN and
+- **Possible readout path:** the AXP8191 has an **on-chip ADC with dedicated VBUS/ACIN and
   battery-voltage channels**, plus charge/adapter status bits, but the
   currently-bound `axp20x`-variant driver (bound for the PEK power button and
   its regulator rails) **exposes none of that** to Linux — no fuel-gauge
   class, no hwmon entry for the battery rails.
+  The HAT photos do not establish that these SBC ADC inputs are connected to
+  the HAT battery; this is a possible route, not a confirmed explanation for
+  the missing battery reading.
 - The companion `axp515` node on the same bus (probed but inert,
   `waiting_for_supplier=0`) is a possible alternate carrier for a
   battery-ADC the board simply never bound — but the chip identity on that
-  node is itself unresolved (below).
+  node is itself unresolved (below). Its relevance to this battery is also
+  unproven.
 
 ## How we know
+
+- [HAT underside overview](images/PXL_20260917_070632106.jpg) and
+  [battery connector close-up](images/PXL_20260917_070648424.jpg)
+  (2026-09-17): the cell's red/black leads enter a two-pin HAT connector.
+  An eight-pin IC and `4R7` inductor sit nearby. The IC marking is not
+  reliable enough to identify its part number; these photos do not prove
+  whether it charges, boosts, or measures the cell, nor whether the SBC PMIC
+  can sense it.
 
 - Live probe (September 2026 session, no sudo): `ls /sys/class/fuel/` (empty),
   `for d in /sys/class/power_supply/*; do echo "$d: $(cat $d/type 2>/dev/null)";
@@ -49,13 +61,17 @@ inputs).
 
 ## What it portends
 
-- **Battery visibility is the gate on real battery work.** Two documented
-  paths to a voltage/charge readout:
+- **First establish the electrical path:** identify the HAT's eight-pin
+  power IC and trace or measure its battery and USB connections. An AXP chip
+  ID read on the SBC cannot by itself show that the SBC measures this cell.
+
+- **Battery visibility is the gate on real battery work.** Two possible
+  paths to a voltage/charge readout, conditional on tracing the HAT cell:
   1. **Enable/patch the `axp20x` driver's ADC/fuel-gauge side** (the
      up/downstream kernel driver has battery-ADC support for some AXP
-     variants; the exact patch surface depends on which physical chip is
-     which — resolved by the open question below).
-  2. **A userspace daemon reading the ADC over raw I2C** — the `i2c-dev`
+     variants; this only helps if the HAT cell reaches an AXP ADC input).
+  2. **A userspace daemon reading an ADC over raw I2C**, if an accessible
+     chip measures this cell — the `i2c-dev`
      nodes exist but are **root-only** on this board, and `i2c-tools` is not
      installed (an `apt` install needs the operator), so this path, like the
      chip-ID read below, is an operator step or a small privileged
@@ -65,8 +81,8 @@ inputs).
   (registers `0x00`–`0x06`) on **both** `i2c-13` addresses **0x34**
   (presented as `axp515`) and **0x36** (presented as `axp2101`-class, the
   one we know is working) — which physical chip actually carries the
-  battery/charge ADC — is the only way to know which of the two paths above
-  to take first.
+  battery/charge ADC — helps establish the SBC chips' identities. It does
+  not establish which one, if any, is wired to the HAT battery.
 - **Deliberate decision (2026-09-16 session):** do **not** brute-force
   register writes on a live, powered PMIC "to see what happens" — the
   charge-path MOSFET enable bits are the kind of register that, written by
