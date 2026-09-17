@@ -1,8 +1,8 @@
 ---
 plan_id: 2026-09-15-13-17-28_hat-alsa-device-and-tts
 title: Make the HAT speaker play "like a normal sound device" (ALSA jury-rig) + fast TTS (espeak-ng)
-summary: Prove the speaker with real speech (espeak-ng, one-time gate), then integrate a root engine daemon (existing gamepi-sound unit, FROZEN tick path untouched) behind a thin user-space ALSA PCM plugin over a unix socket, so aplay / espeak-ng "text" work with no flags and no service stop/start; every setup.sh change documented in docs/setup.md in the same change and live apply->verify before each commit. Rev 2026-09-16: WS3 v1 plugin built + live-tested and FAILED three ways (build 1 dlopen load-fail "snd_dlsym_start"; build 2 dump-fast ~0.024 s / 0.62x; build 3 wall-clock pacing bug -> 9-min solid-buzzer incident, aplay hot-spin 190% CPU, engine held one sample). Root cause: pointer() as sole backpressure with no bounded wait and no hard failure. Redesign (gated send-pacer, real drain, stop-closes, starve watchdog, offline pacing self-test BEFORE any pin) proposed after a reference-grounding audit of the 1.2.14 spin path + aplay loop — see journal 2026-09-16-hat-plugin-builds-audit-and-redesign.
-status: current
+summary: Prove the speaker with real speech (espeak-ng, one-time gate), then integrate a root engine daemon (existing gamepi-sound unit, FROZEN tick path untouched) behind a thin user-space ALSA PCM plugin over a unix socket, so aplay / espeak-ng "text" work with no flags and no service stop/start; every setup.sh change documented in docs/setup.md in the same change and live apply->verify before each commit. Rev 2026-09-16: WS3 v1 plugin built + live-tested and FAILED three ways (build 1 dlopen load-fail "snd_dlsym_start"; build 2 dump-fast ~0.024 s / 0.62x; build 3 wall-clock pacing bug -> 9-min solid-buzzer incident, aplay hot-spin 190% CPU, engine held one sample). Root cause: pointer() as sole backpressure with no bounded wait and no hard failure. Redesign (gated send-pacer, real drain, stop-closes, starve watchdog, offline pacing self-test BEFORE any pin) proposed after a reference-grounding audit of the 1.2.14 spin path + aplay loop — see journal 2026-09-16-hat-plugin-builds-audit-and-redesign. Rev 2026-09-16 (later): 3.1r.2 DONE + committed `a3d8f32` — offline pacing self-test GREEN (6 consecutive full-suite runs; the v1 defects pinned RED, the v2 gated model incl. the arc's superset proved green); the self-test's in-code comments now double as the spec for what the product plugin must mirror. PAUSED 2026-09-16: 3.1r.4 live batch gate (a) GREEN, gate (b) RED (client-side wait stall at the 22 050 Hz resampled rate — the run3/run4 "client wrote / engine never read it" contradiction stands; feeder-utime discriminator run5 pending); a mid-investigation reboot wiped the /tmp toolchain, re-reconstructed from the session transcript — journals 2026-09-16-gate-b-red-client-wait-hang + 2026-09-16-live-batch-paused-reboot-and-recovery.
+status: future
 created_at: 2026-09-15-13-17-28
 revised: 2026-09-16
 ---
@@ -320,31 +320,66 @@ wait is a pass-through poll of the plugin's `poll_fd`.
     downmix, param lists, `prepare` reset, `close` frees, `dump`,
     connect/lazy-connect idempotency, `reinit_status` at connect/close.
   - Build zero warnings; md5 recorded; stage to /tmp/hatplug (scratch).
-- [ ] 3.1r.2 `tools/hat_pace_selftest.c` (tracked): deterministic
-  pacing check with NO GPIO and NO engine — a fake "engine" thread with
-  a known 85 ms in-kernel-equivalent delay pulls from its end of the
-  socket pair at fixed 48 kHz pace; driver opens the plugin via
-  `snd_pcm_open("hat", …)` with `hat_path` pointed at the pair, plays a
-  generated pattern via the same writei/wait/EPIPE-prepare loop aplay
-  uses, and asserts: total wall time within ±10% of pattern duration;
-  no pointer going backwards; XRUN never fires in healthy mode; the
-  starve-watchdog mode (fake engine stops pulling) DOES fire -EIO →
-  XRUN within X ms. FIRST JOB of this harness: numerically reproduce
-  build 3's fixed-point `mass`/`drain` under-report — trace the carry
-  in the CONSUMED compute, pin the exact line that drops consumption —
-  and show the harness catches it (RED on the buggy model, GREEN on the
-  gated model), so the incident's trigger is proven on the desktop
-  before it is trusted. Green = pacing contract proven without the
-  board. Build + run green on this machine (workspace == board)
-  BEFORE 3.2.
-  - [ ] 3.1r.3 Rebuild .so from v2 source, verify symbols —
-  `_snd_pcm_hat_open` (T) + version marker
-  `__snd_pcm_hat_open_dlsym_pcm_001` (B), NO `snd_dlsym_start` refs,
-  built with `-DPIC` (mandatory; see 3.1's BUILD 1) — + load under
-  `ALSA_CONFIG_DIR` pointed at /tmp/hatplug (nm/objdump in scratch);
-  re-stage /tmp/hatplug/libasound_module_pcm_hat.so; RETIRE the
-  build-3 artifact (md5 33037e8e…, the buzzer build) — it must NOT be
-  installed.
+- [x] 3.1r.2 `tools/hat_pace_selftest.c` (tracked; commit `a3d8f32`,
+  2026-09-16, ahead 1, NOT pushed): deterministic pacing check with NO
+  GPIO and NO engine — a fake "engine" daemon (NOT a bare thread: the
+  REAL serial job machine — one accept at a time, job = client
+  EOF + full ring drain, feeder thread + 192 kHz spin tick loop, fixed
+  8192 B ring that sleeps when full, hold-last-sample + underrun++ on
+  empty tick) plus two self-contained v1/v2 snd_pcm-ioplug-shaped
+  client models driven by a faithful aplay harness (blocking send on
+  -EPIPE prepare+retry; 100 ms poll retry on -EAGAIN; no client-side
+  sleep — the socket IS the pacing, in both models). Shipped richer
+  than the paper spec; every check asserts a number, not a name, and
+  the RED checks assert the v1 violation PERSISTS (a green run keeps
+  pinning the defect): T1 v1-healthy → early done-release pinned
+  (claim 88,200 client frames at close vs live engine counter
+  ~70.5k; tail 19,206–19,261 wire samples ≈ 400 ms still owed; no
+  truncation — engine plays on, drain is the product no-op per
+  pcm_ioplug.c:533-578); T2/T5 v2-healthy clean (T5: 0.3 s file =
+  exactly 14,399 wire samples in/out — resampler pinned; 28,798 B
+  exact); T3/T6b v2 stall (paused feeder, tick keeps running) → XRUN +
+  recover, detect ~1.70 s via the POINTER-STALL path (front freezes
+  ~+85 ms post-pause + 600 ms watchdog + 100 ms poll grain); T4 v2 kill →
+  XRUN + lazy reconnect, detect ~1.00 s via the TRANSPORT path (die-
+  close EPIPEs the in-flight send); T6a v1 stall → silent 915 ms
+  (~44k-tick) DC-buzz ride-through + deterministic full-second over-claim
+  at close (43,776 wire = 912 ms, identical every run: close lands
+  mid-freeze, owed = 1000 ms − 85 ms ring chew) — the socket's ~2.1 s
+  ceiling (sndbuf 131,072 B + rcvbuf 65,536 B + ring) absorbs the whole
+  1 s stall, so T6a push == T1 push == 1.60 s: the stall's cost is
+  engine-side buzz + over-claim, NOT client wall time; xruns ∈ [1,2] in
+  the kill/stall scenarios (serial engine accept-window hand-off: a
+  fresh connection reads the dying job's residual ladder/evidence —
+  logged `end_in=-2102 ms` — and the stall clock fires once more).
+  FIRST JOB met: build-3's `mass`/`drain` under-report is the T1/T6a
+  RED machinery verbatim — the harness catches it. 6 consecutive
+  full-suite runs green (28 checks), `-Wall -Wextra` clean, zero
+  warnings; kept all state-change debug lines (`/tmp/hps_dbg.log`),
+  stripped all rate probes. Engine fidelity note is baked in (FEED-
+  ONLY stall; no tick-clock freeze, no re-anchor — the old test
+  variant froze both clocks and hid the signal). The self-test's
+  in-code comments are now the spec the 3.1r.3 product plugin must
+  mirror (gated send + 600 ms gate watchdog, pointer-side stall →
+  -EIO, evidence cap, ring-margin drain, monotone pointer, no op
+  drain, stop-closes, 19-bit fixed point PITCH = 48000*524288/44100,
+  wire→client 147/160). Operator ask raised in the commit message:
+  the compiled binary `tools/hat_pace_selftest` (the binary WITHOUT
+  `.c`) is untracked and not gitignored — decide ignore/delete/keep
+  before the next commit.
+  - [x] 3.1r.3 DONE 2026-09-16 (code-complete + verified offline; journal
+  2026-09-16-hat-plugin-v2-complete): `tools/hat_alsa_plugin.c` rewritten
+  to the v2 pacing model (dry-only re-anchor, D-transfer-err -EPIPE
+  contract, D-ptrreset prepare stall-clear, D-drain-dead). Zero-warning
+  build; re-staged /tmp/hatplug/libasound_module_pcm_hat.so md5
+  `4b5898126e7219b589ce7d1069df01f3`; `nm -D` shows exactly `_snd_pcm_hat_open`
+  (T) + `__snd_pcm_hat_open_dlsym_pcm_001` (B), NO `snd_dlsym_start`
+  (also probe-verified via dlopen+dlsym); scratch load under
+  ALSA_CONFIG_DIR=/tmp/hatscratch + ALSA_PLUGIN_DIR=/tmp/hatplug:
+  `aplay -L` lists `hat`, `timeout 10 aplay -D hat -l` exit 0. Build-3
+  artifact (md5 33037e8e…) RETIRED (repo-root copy deleted; it was never
+  installed — board still runs build-2 `728c2456…` until the live batch
+  is green).
 - [ ] 3.1r.4 Timeout-gated live batch for the operator (ONE ask,
   ~3 min cap each, auto-Ctrl-C semantics documented in the batch):
   (a) `aplay -D hat` ~2 s generated tone → elapsed ≈ 2 s (the pacing
@@ -356,6 +391,24 @@ wait is a pass-through poll of the plugin's `poll_fd`.
   OR exits cleanly with no hang; daemon restarted by systemd. Gated: if
   (a) is off by >±15% we stop and re-tune the gate before (b)/(c).
   ONE question on pass: clean, on-time speech?
+  LIVE RESULTS 2026-09-16 (see journal 2026-09-16-gate-b-red-client-wait-hang +
+  2026-09-16-live-batch-paused-reboot-and-recovery): (a) GREEN — 48 kHz 2 s
+  tone → 2.211 s wall (+10.6%, within ±15%). (b) RED — espeak 22 050 Hz
+  sentence hit the full 10 s cap; engine consumed ~73 ms of audio (single
+  accept, no EPIPE, no 2nd job, no watchdog fire) → client parked in its wait
+  loop ~9.9 s while the socket was writable and the pointer fully advanced.
+  Deterministically reproduced in run3/run4 (engine read exactly 1512 B
+  while the harness's own write loop returned 74×32 frames, dt<0.03 ms each,
+  and ss showed the TX queue at zero for 4+ s — an unsatisfied
+  contradiction; prime suspect the framework wait path at the resampled
+  rate). Operator rebooted mid-investigation → all /tmp toolchain + run
+  logs wiped; harness + monitor4 re-reconstructed from the session
+  transcript (zero-warning; md5s in the pause journal). (c) NOT STARTED.
+  PLAN PAUSED 2026-09-16 at the operator's request — status back to `future`
+  (the framework lifecycle has no "paused"; a paused plan is a queued one),
+  file moved to plans/future/. Resumption = the run5 feeder-utime discriminator
+  (script + command in the pause journal's resumption checklist), then
+  classify-and-fix per the gate-b journal's next-steps list.
 - On approval: 3.2 is now a trivial v2-load check (symbol naming /
   plugin dir / connect path are already resolved on-board by builds
   2/3 — see journal) and subsumes into the 3.1r.4 batch as its

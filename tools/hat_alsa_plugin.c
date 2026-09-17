@@ -12,29 +12,60 @@
  *     on AF_UNIX SOCK_STREAM /run/gamepi-sound.sock (mode 0666, root, RT)
  *   - one connection = one job: engine resets integrator on connect,
  *     plays ring tail after our close (clean EOF = drain), logs stats
- *   - engine does not set socket buffers: we cap our SO_SNDBUF (measured
- *     prefill ceiling ~0.66 s at 48k mono — ~85 ms ring + bounded queue)
+ *   - engine does not set socket buffers: we cap our SO_SNDBUF (the
+ *     prefill ceiling; see the transport-budget note below) and run it
+ *     NONBLOCKING, so a dead/wedged engine never blocks a client call
  *
- * What this plugin does, per open:
+ * What this plugin does, per open (v2):
  *   - advertises RW_INTERLEAVED s16le mono/stereo, 11 common rates
- *   - prepare: picks a resampler (identity / up / down) from the rate
+ *   - prepare: picks a resampler (identity / up / down) from the rate and
+ *     anchors the consumption clock at the job start
  *   - transfer: downmixes client frames to mono, linearly resamples to
  *     48k (exact streaming linear filter, ALSA pcm_rate_linear algorithm
- *     adapted to cross-chunk carry), blocking send()s; no internal ring
- *     (the socket IS the ring)
- *   - pointer: the engine exposes NO status channel, so consumption is
- *     ACCOUNTED against the wall clock (CLOCK_MONOTONIC): `mass` 48 kHz
- *     samples sent at time T drain by T + mass/48k (drain time), so
- *     pointer reports consumed = mass - in-flight in CLIENT frames.
- *     That lag behind appl is what makes __snd_pcm_hwsync actually wait;
- *     send() blocking on a full queue is the second backpressure belt
+ *     adapted to cross-chunk carry), then send()s a chunk NONBLOCKING
+ *     under a bounded poll() watchdog; no internal ring (the socket IS the
+ *     ring)
+ *   - pointer: a GATED SCHEDULE — `consumed` 48 kHz samples advance at
+ *     exactly HAT_WIRE_RATE, but ONLY while there is in-flight backlog
+ *     (consumed < sent); each resumption re-anchors at now (stall-aware).
+ *     The invariant consumed <= sent means the pointer can NEVER outrun
+ *     bytes actually handed to the engine — the fix for the v1 defect,
+ *     where `mass`/`drain` was a pure send-side clock, so `available`
+ *     went negative the instant `sent` froze, the engine starved, and a
+ *     stalled feeder rode through for minutes (tools/hat_pace_selftest.c,
+ *     cases T1/T3/T6). Reported in CLIENT frames.
  *   - snd_pcm_wait() parks on POLLOUT of the engine socket (revents
- *     pass-through), so a "full" client sees it ready only when engine
- *     drains — natural run-to-start behaviour, zero busy-wait
- *   - engine death mid-job: send() fails -> dead -> -EPIPE; clients that
- *     snd_pcm_recover() reconnect on the next transfer (fresh job);
- *     pointer() reports -EIO so the state machine XRUNs instead of
- *     looping
+ *     pass-through): a "full" client sees it ready only when the engine
+ *     drains the queue — natural run-to-start, zero busy-wait
+ *   - STALL/DEATH DETECTION (the offline self-test's T3/T4/T6b, in-product):
+ *       * transport dead: send() -> EPIPE/ECONNRESET/ENOTCONN, or POLLERR/
+ *         POLLHUP -> dead -> -EIO; a client that snd_pcm_recover()s
+ *         reconnects on the next transfer (fresh job)
+ *       * send wedged (nonblocking, no progress) past WATCHDOG -> -EIO
+ *       * pointer frozen >= WATCHDOG while a schedule is still PENDING
+ *         (sent ahead of consumed) -> dead -> -EIO. Health check that
+ *         cannot false-fire on a healthy run: consumed advances while
+ *         sent > consumed, and at buffer end there is no pending
+ *         schedule — the check stays silent through the ~85 ms ring tail.
+ *
+ * The FROZEN v3.6 engine exposes NO delivered-bytes counter channel, so
+ * the consumption evidence bound is `sent` (handed to the kernel): a
+ * stall SHORTER than the socket budget is absorbed by the queue and only
+ * surfaces once the queue drains and consumed freezes — see the offline
+ * self-test's evidence-cap note and the journal. If the engine ever gains
+ * a delivered-bytes counter, cap consumed by it (stronger bound) instead.
+ *
+ * Transport budget (mirrors the offline self-test's pinned v2 values):
+ *   - we cap SO_SNDBUF at HAT_SNDBUF (advisory: the 16 KiB request reads
+ *     back ~2x, and the kernel feeds the engine's default rcvbuf).
+ *     Worst case send-ahead = socket + ring (bounded sub-second) at 48k
+ *     mono. This small prefill is deliberate: it bounds how much a
+ *     stalled feeder can over-claim before the leaky bucket
+ *     (consumed <= sent) exposes it at the pointer, and keeps the
+ *     client's avail from going deeply negative.
+ *   - HAT_WATCHDOG_NS (600 ms) mirrors the self-test's WATCHDOG_MS (600):
+ *     any no-progress or send-side stall longer than this is a fault,
+ *     not a slow engine — the whole point of v2.
  *
  * Build (board or host):
  *   cc -O2 -Wall -Wextra -fPIC -DPIC -shared \
@@ -50,6 +81,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -64,7 +96,17 @@
 
 #define HAT_SOCKET_DEFAULT "/run/gamepi-sound.sock"
 #define HAT_WIRE_RATE      48000u          /* engine fixed rate, Hz */
-#define HAT_SNDBUF         (64u * 1024)    /* our half of the prefill cap */
+#define HAT_SAMPBYTES      2u              /* 16-bit mono wire sample */
+
+/* transport budget — the pinned v2 values from the offline self-test
+ * (tools/hat_pace_selftest.c): a SMALL send-ahead so a stalled feeder
+ * over-claims little before the leaky bucket (consumed <= sent) exposes
+ * it, and a 600 ms WATCHDOG that turns any no-progress stall into a
+ * recoverable fault instead of a silent ride-through (the v1 sin). */
+#define HAT_SNDBUF        (16u * 1024)     /* SO_SNDBUF (advisory, ~2x) */
+#define HAT_WATCHDOG_NS   (600ull * 1000000ull) /* stalled-engine bound */
+#define HAT_RING_NS       (180ull * 1000000ull) /* engine ring drain margin */
+#define HAT_NSC2S         1000000000ull    /* wall ns -> 48 kHz samples */
 
 /* resampling fixed point (same scale as ALSA's linear rate plugin) */
 #define HAT_LIN_SHIFT 19
@@ -90,16 +132,27 @@ struct hat_state {
     unsigned int       pos;
     int32_t            prev;      /* last input sample (int32 for weight math) */
 
-    /* pacing accounting (see hat_pointer): the engine's tick clock is
-     * wall-locked, so consumed 48 kHz samples are a pure function of
-     * wall time — mass sent drains by `drain`, then freezes until more
-     * is sent (engine starves). pointer reports consumed in client
-     * frames; the resampler carry keeps it <= frames ever accepted, so
-     * hw never outruns appl and avail never goes negative. */
-    uint64_t           mass;    /* 48 kHz samples handed to the socket */
-    uint64_t           drain;   /* wall ns at which `mass` is consumed */
-    snd_pcm_sframes_t  sent;    /* client frames CONSUMED (== pointer) */
-    uint64_t           acc;     /* 48->client frame remainder, DIV scale */
+    /* v2 pacing: a GATED leaky bucket. `sent` = wire samples handed to
+     * the engine (acceptance boundary); `consumed` = wire samples the
+     * engine has actually chewed. consumed advances at HAT_WIRE_RATE but
+     * ONLY while backlog is in flight (consumed < sent); on each resume
+     * the clock re-anchors at `now` (hat_now_ns), so a wall gap while
+     * the socket is empty contributes nothing. Invariant: consumed
+     * <= sent, so the pointer can never outrun bytes handed to the
+     * engine (v1's `mass`/`drain` had no such ceiling — the defect that
+     * let a stalled feeder over-claim minutes). Stall detection (see
+     * hat_pointer): while sent > consumed (a schedule is PENDING), a
+     * frozen consumed for HAT_WATCHDOG_NS is a fault -> -EIO. At buffer
+     * end consumed == sent and there is no pending schedule, so the
+     * check stays silent through the ~85 ms ring tail. */
+    uint64_t           sent;        /* wire SAMPLES handed to the engine */
+    uint64_t           consumed;    /* wire SAMPLES chewed (leaky bucket) */
+    uint64_t           anchor_ns;   /* wall ns where consumed's clock runs */
+    snd_pcm_sframes_t  frames_sent; /* client frames consumed (== pointer) */
+    uint64_t           acc;         /* 48->client frame remainder, DIV scale */
+    uint64_t           ptr_val;     /* last observed consumed (stall detector) */
+    uint64_t           ptr_ns;      /* wall ns `ptr_val` was first observed */
+    int                ptr_have;    /* ptr_val/ptr_ns valid */
 
     int32_t            *staging;  /* HAT_STAGING */
     int16_t            *out;      /* HAT_MAXOUT */
@@ -171,9 +224,26 @@ static void hat_disconnect(struct hat_state *st)
     st->fd = -1;
 }
 
-/* connect a fresh engine job; caller must hold no pcm lock state
- * invariants (called from start/transfer callbacks, which run under
- * the pcm lock except drain — single-client deck, safe). */
+static uint64_t hat_now_ns(void);   /* used by hat_connect below it */
+
+/* 10 ms pause for the connect retry (nanosleep: POSIX under our
+ * _POSIX_C_SOURCE, no usleep portability footgun). */
+static void hat_sleep_ms(unsigned int ms)
+{
+    struct timespec d = { 0, (long)ms * 1000000L };
+    (void)nanosleep(&d, NULL);
+}
+
+/* connect a fresh engine job (v2). Like the offline self-test's
+ * model_connect (its v2 branch): a single client gives the engine up to
+ * ~2 s to become ready — tolerating, say, a systemd restart right after
+ * an XRUN before we fail. (v1 did ONE attempt; the retry is part of the
+ * v2 model the self-test pins.) The socket runs NONBLOCKING with our
+ * half of the transport budget (HAT_SNDBUF), so a dead/wedged engine
+ * never blocks a client call — hat_transfer's watchdog is the backstop.
+ * Caller must hold no pcm-lock invariants (called from the
+ * start/transfer callbacks, which run under the pcm lock except drain —
+ * single-client deck, safe). */
 static int hat_connect(struct hat_state *st)
 {
     struct sockaddr_un a;
@@ -198,17 +268,31 @@ static int hat_connect(struct hat_state *st)
         close(fd);
         return -ENAMETOOLONG;
     }
-    if (connect(fd, (struct sockaddr *)&a, sizeof(a)) < 0) {
-        int err = -errno;
-        close(fd);
-        return err;
+    {
+        uint64_t deadline = hat_now_ns() + 2000000000ull; /* ~2 s */
+        for (;;) {
+            if (connect(fd, (struct sockaddr *)&a, sizeof(a)) == 0)
+                break;
+            close(fd);
+            if (hat_now_ns() >= deadline)
+                return -EIO; /* engine not ready within the budget */
+            hat_sleep_ms(10);
+            fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+            if (fd < 0)
+                return -errno;
+        }
     }
-    /* bound our send queue: engine's ring (85 ms) + this is the total
-     * prefill (measured ~0.66 s; the engine side is uncapped). */
+    /* our half of the transport budget: caps how far ahead a stalled
+     * feeder can run before consumed (<= sent) exposes it (see header). */
     {
         int v = HAT_SNDBUF;
-        if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &v, sizeof(v)) < 0)
-            errno = 0; /* advisory only */
+        (void)setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &v, sizeof(v));
+    }
+    /* NONBLOCKING: send() -> -EAGAIN on a full queue instead of blocking
+     * forever on a dead engine; the watchdog in hat_transfer bounds it. */
+    {
+        int fl = fcntl(fd, F_GETFL, 0);
+        (void)fcntl(fd, F_SETFL, fl | O_NONBLOCK);
     }
     st->fd = fd;
     return 0;
@@ -252,37 +336,78 @@ static uint64_t hat_now_ns(void)
     return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
 }
 
+/* the gated leaky bucket: consumed = samples chewed. The engine pulls
+ * the socket at HAT_WIRE_RATE, so consumed advances at that rate ONLY
+ * while backlog is in flight (consumed < sent); on each resume the clock
+ * re-anchors at `now`, so a wall gap while the socket is empty adds no
+ * consumption. Invariant: consumed <= sent (the pointer can never outrun
+ * what was handed to the engine). Called on every pointer()/drain() tick. */
+static void hat_consume_advance(struct hat_state *st, uint64_t now)
+{
+    if (st->sent > st->consumed) {
+        uint64_t el = now > st->anchor_ns ? now - st->anchor_ns : 0;
+        /* split multiply: (el % NSC2S) * RATE < 1e9 * 48000, so the
+         * product cannot overflow u64 even for absurd el; the whole-second
+         * term overflows only at ~24 years of continuous pending. */
+        uint64_t gained = (el / HAT_NSC2S) * HAT_WIRE_RATE +
+                          ((el % HAT_NSC2S) * HAT_WIRE_RATE) / HAT_NSC2S;
+        if (gained > st->sent - st->consumed)
+            gained = st->sent - st->consumed;
+        st->consumed += gained;
+        st->anchor_ns = now;
+    }
+    /* frozen while PENDING = a fault. A schedule is pending iff the
+     * engine still has bytes to chew (sent ahead of consumed). Once the
+     * schedule is fully chewed there is no pending, so the check cannot
+     * fire through the healthy ~85 ms ring tail. This mirrors the
+     * self-test's v2_front_stalled (front frozen with work pending). */
+    if (st->sent > st->consumed) {
+        if (!st->ptr_have || st->consumed != st->ptr_val) {
+            st->ptr_val = st->consumed;
+            st->ptr_ns = now;
+            st->ptr_have = 1;
+        } else if (now - st->ptr_ns >= HAT_WATCHDOG_NS) {
+            st->dead = 1;
+        }
+    } else {
+        st->ptr_have = 0; /* fully chewed: clear the stall clock */
+    }
+}
+
+/* pointer = consumed (samples) -> client frames, DIV fixed point.
+ * Monotone by construction (leaky bucket only advances); 0 until bytes
+ * are handed to the engine (sent > 0). Dead transport or a frozen front
+ * -> -EIO, which the state machine turns into a recoverable XRUN
+ * instead of looping (the v1 "pointer is the clock" defect, fixed). */
 static snd_pcm_sframes_t hat_pointer(snd_pcm_ioplug_t *io)
 {
     struct hat_state *st = io->private_data;
-    uint64_t now, w, f, saved;
+    uint64_t now, f;
 
-    /* monotonic; no boundary flag set, so the wrap branch is never
-     * reachable and the state machine sees XRUN on -EIO. */
     if (st->dead)
         return -EIO;
-    if (st->mass == 0)
-        return st->sent; /* 0 until the first send */
+    if (st->sent == 0)
+        return 0; /* nothing handed to the engine yet */
+
     now = hat_now_ns();
-    /* in flight = backlog still to be pulled at HAT_WIRE_RATE */
-    if (now >= st->drain)
-        w = st->mass;
-    else {
-        uint64_t rem = (st->drain - now) * HAT_WIRE_RATE
-                      / 1000000000ull;
-        w = st->mass - (rem > st->mass ? st->mass : rem);
+    hat_consume_advance(st, now);
+    if (st->dead)
+        return -EIO; /* front froze while a schedule was pending */
+
+    /* wire samples -> client frames, DIV scale; advance the reported
+     * counter monotonically (divide before the DIV multiply so long
+     * sessions stay well under u64 max). */
+    f = ((st->consumed * (uint64_t)st->rate) / HAT_WIRE_RATE) * HAT_LIN_DIV;
+    {
+        uint64_t saved =
+            (uint64_t)st->frames_sent * HAT_LIN_DIV + st->acc;
+        if (f > saved) {
+            uint64_t d = f - saved;
+            st->frames_sent += (snd_pcm_sframes_t)(d >> HAT_LIN_SHIFT);
+            st->acc = d & (HAT_LIN_DIV - 1);
+        }
     }
-    /* 48 kHz samples -> client frames, DIV fixed point (monotonic: the
-     * resampler carry guarantees this never exceeds frames accepted).
-     * Divide before the DIV multiply so long sessions stay << u64 max. */
-    f = ((w * (uint64_t)st->rate) / HAT_WIRE_RATE) * HAT_LIN_DIV;
-    saved = (uint64_t)st->sent * HAT_LIN_DIV + st->acc;
-    if (f > saved) {
-        uint64_t d = f - saved;
-        st->sent += (snd_pcm_sframes_t)(d >> HAT_LIN_SHIFT);
-        st->acc = d & (HAT_LIN_DIV - 1);
-    }
-    return st->sent;
+    return st->frames_sent;
 }
 
 static size_t hat_chunk(const struct hat_state *st)
@@ -296,6 +421,88 @@ static size_t hat_chunk(const struct hat_state *st)
         return (size_t)c;
     }
     return HAT_STAGING;
+}
+
+/* The streaming resampler carries phase (pos) and prev across chunk
+ * calls. The v2 transport escapes mid-transfer to -EPIPE (recoverable
+ * by aplay/snd_pcm_recover) on a dead or wedged transport — and the
+ * self-test's -EAGAIN soft-pause is deliberately NOT used in-product,
+ * because it is safe only for its synthetic-zero content: the resampler
+ * carry must stay contiguous with the bytes the client has handed over.
+ * A failed mid-chunk attempt must therefore not leave the carry
+ * advanced. Roll the carry back to just before this chunk: phase moves
+ * back by n_in*pitch (mod HAT_LIN_DIV); prev = the last consumed MONO
+ * input sample (mono domain, so 1-ch and 2-ch clients are both exact;
+ * still valid because hat_downmix wrote this chunk's staging first).
+ * frames_sent/acc need no rollback: they advance only via `consumed`,
+ * which is updated solely on whole accepted chunks (so frames_sent
+ * remains <= frames of any completed chunk). On the resulting XRUN,
+ * prepare() -> hat_prepare() re-initialises the carry anyway; the
+ * restore keeps in-flight state honest in the meantime. */
+static void hat_restore_carry(struct hat_state *st, snd_pcm_uframes_t n_in)
+{
+    uint64_t back = (uint64_t)n_in * st->pitch % HAT_LIN_DIV;
+
+    /* pos advanced by n_in*pitch (mod DIV); roll it back exactly. */
+    st->pos = (unsigned int)(st->pos + HAT_LIN_DIV - back) % HAT_LIN_DIV;
+    /* prev = the last CONSUMED MONO input sample. st->staging still holds
+     * this chunk's downmix at failure time (mono domain: correct for
+     * 1-ch AND 2-ch clients). */
+    if (n_in > 0)
+        st->prev = st->staging[n_in - 1];
+}
+
+/* nonblocking send of one resampled chunk (`nsamples` wire s16 in `out`)
+ * to the engine socket, bounded by the watchdog. Returns 0 on a complete
+ * send (the caller then advances sent/anchor), or -EIO on a dead/wedged
+ * transport (EPIPE/ECONNRESET/ENOTCONN, a POLLERR/POLLHUP, or no progress
+ * across the full watchdog). (Internal convention: -EIO; the caller maps
+ * it to -EPIPE for the client — snd_pcm_recover() recovers -EPIPE but not
+ * -EIO.) The socket is O_NONBLOCK, so send() returns
+ * -EAGAIN (never blocks) until the engine drains the queue; the poll
+ * bounds how long we wait before declaring the engine wedged. A failed
+ * path may leave a partial prefix already in the kernel — fine: the job
+ * is dying and prepare() resets the carry on the next XRUN. */
+static int hat_send_chunk(struct hat_state *st, const int16_t *out,
+                          size_t nsamples)
+{
+    const uint8_t *p = (const uint8_t *)out;
+    size_t left = nsamples * HAT_SAMPBYTES;
+    uint64_t block_start = 0;
+
+    while (left > 0) {
+        ssize_t w = send(st->fd, p, left, MSG_NOSIGNAL);
+        if (w >= 0) {
+            p += (size_t)w;
+            left -= (size_t)w;
+            block_start = 0;            /* resumed: reset the block clock */
+            continue;
+        }
+        if (errno == EINTR)
+            continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            uint64_t now;
+            if (!block_start) {
+                block_start = hat_now_ns();
+                continue;
+            }
+            now = hat_now_ns();
+            if (now - block_start >= HAT_WATCHDOG_NS)
+                return -EIO;             /* wedged: no progress */
+            struct pollfd pf = { .fd = st->fd,
+                                 .events = POLLOUT | POLLERR | POLLHUP };
+            int pr = poll(&pf, 1,
+                          (int)(((HAT_WATCHDOG_NS - (now - block_start)) /
+                                 1000000ull) + 1));
+            if (pr < 0 && errno != EINTR)
+                return -EIO;
+            if (pr > 0 && (pf.revents & (POLLERR | POLLHUP)))
+                return -EIO;             /* dead socket; aplay -> XRUN */
+            continue;                    /* woke (or timed out): retry */
+        }
+        return -EIO;                     /* ECONNRESET etc: transport dead */
+    }
+    return 0;
 }
 
 static snd_pcm_sframes_t hat_transfer(snd_pcm_ioplug_t *io,
@@ -326,8 +533,6 @@ static snd_pcm_sframes_t hat_transfer(snd_pcm_ioplug_t *io,
                                                     : hat_chunk(st);
         int16_t *dst = st->out;
         size_t n_out;
-        const char *p;
-        size_t left;
 
         hat_downmix((const int16_t *)base, st->channels, n_in, st->staging);
 
@@ -340,38 +545,43 @@ static snd_pcm_sframes_t hat_transfer(snd_pcm_ioplug_t *io,
             n_out = hat_resample(st, st->staging, n_in, dst);
         }
 
-        p = (const char *)dst;
-        left = n_out * sizeof(int16_t);
-        while (left > 0) {
-            ssize_t w = send(st->fd, p, left, MSG_NOSIGNAL);
-            if (w < 0) {
-                if (errno == EINTR)
-                    continue;
-                /* engine gone: report as recoverable underrun; the next
-                 * transfer after snd_pcm_recover() reconnects (fresh job).
-                 * partial chunk bytes may be in flight — fine, the job
-                 * was dying anyway. */
-                st->dead = 1;
-                return -EPIPE;
-            }
-            p += w;
-            left -= (size_t)w;
+        if (hat_send_chunk(st, dst, n_out) < 0) {
+            /* transport dead or wedged past the watchdog: close the
+             * socket (the dying job ends at engine EOF and the next
+             * transfer gets a fresh connection = fresh engine job),
+             * roll the resampler carry back to before this chunk, and
+             * die. The error is -EPIPE (NOT -EIO): snd_pcm_recover()
+             * only recovers -EPIPE/-ESTRPIPE/-EINTR; aplay would exit
+             * on -EIO. aplay sees -EPIPE -> snd_pcm_recover() ->
+             * snd_pcm_prepare() (which resets the job anchor) -> the
+             * next transfer reconnects. The POINTER side of -EIO
+             * (hat_pointer -> dead) is what drives the framework XRUN:
+             * hwsync error -> avail EPIPE -> XRUN -> -EPIPE to aplay. */
+            hat_disconnect(st);
+            hat_restore_carry(st, n_in);
+            st->dead = 1;
+            return -EPIPE;
         }
-        /* pacing: this chunk joins the engine's ring and is pulled out
-         * at exactly HAT_WIRE_RATE. Cumulative: if the backlog still has
-         * un-drained mass, append to its drain interval; if it already
-         * drained (client slowed), anchor a fresh interval at `now`.
-         * (Pointer math relies on CUMULATIVE arrival, not the last
-         * chunk's — see hat_pointer.) */
+
+/* pacing: this chunk joins the engine's ring and is pulled out at
+         * exactly HAT_WIRE_RATE back-to-back behind whatever is already
+         * queued (self-test v2_chewed_wire: "start = entry > front_end ?
+         * entry : front_end"). It is accepted by the kernel at `now`, so
+         * it extends the send-side boundary (`sent`); the bucket clock
+         * re-anchors at `now` ONLY when the engine is already fully
+         * chewed (the send queue was dry) — i.e. this chunk's chewing
+         * starts now. After a starve gap the engine catches up to the
+         * ring in the gap, so an unmodified anchor would credit the
+         * gap's worth of chewing to this chunk (the v1 over-claim sin);
+         * re-anchoring on the dry condition removes the slack — mirrors
+         * the self-test's entry-vs-front-end. hat_consume_advance keeps
+         * consumed <= sent. */
         {
             uint64_t now = hat_now_ns();
-            if (st->drain > now && st->mass > 0) {
-                st->drain += (n_out * 1000000000ull) / HAT_WIRE_RATE;
-            } else {
-                st->drain = now + (n_out * 1000000000ull) / HAT_WIRE_RATE;
-            }
+            if (st->consumed == st->sent)
+                st->anchor_ns = now;
+            st->sent += n_out;
         }
-        st->mass += n_out;
         done += n_in;
         base += n_in * st->channels * 2;
     }
@@ -392,20 +602,64 @@ static int hat_prepare(snd_pcm_ioplug_t *io)
     st->pos = 0;
     st->prev = 0;
     st->sent = 0;
+    st->consumed = 0;
+    st->anchor_ns = hat_now_ns();
+    st->frames_sent = 0;
     st->acc = 0;
-    st->mass = 0;
-    st->drain = hat_now_ns();
     st->dead = 0;
+    /*
+     * The framework's prepare() resets last_hw (= our virtual hw.ptr)
+     * to 0 (pcm_ioplug.c:167 snd_pcm_ioplug_reset) BEFORE calling this
+     * callback — spec line 44: "prepare resets last_hw via reset". So
+     * the pointer MUST come back from scratch for the new job: the
+     * stall clock (ptr_val/ptr_ns/ptr_have) rides the same job boundary
+     * as the chew state (self-test model_reset: "a prepare-then-reconnect
+     * (XRUN recovery) MUST start with a clean front"), else a recovery
+     * into a deep stall could false-fire the watchdog on resume.
+     */
+    st->ptr_val = 0;
+    st->ptr_ns = 0;
+    st->ptr_have = 0;
     return 0;
 }
 
 static int hat_drain(snd_pcm_ioplug_t *io)
 {
-    /* non-blocking by design: everything we care about is already sent;
-     * framework drop() -> hat_stop() closes the socket, engine plays the
-     * remainder of its ring then frees the pin. return 0 => drop. */
-    (void)io;
-    return 0;
+    struct hat_state *st = io->private_data;
+
+    /* Framework (pinned 1.2.14, pcm_ioplug.c:549-553) RELEASES the pcm
+     * lock before calling here, so sleeping is safe. Wait until the
+     * leaky bucket says the engine has chewed every accepted chunk
+     * (consumed == sent), then allow the ring drain margin: the ring
+     * holds <= RING_MAX = 8192 B of wire at 48000 samples/s = exactly
+     * HAT_RING_NS (180 ms). Mirrors the self-test's done_condition --
+     * aplay's measured drain then approximates TRUE pin silence, which
+     * is what the live gate (a) checks. A live `amixer`/`top` style
+     * stall in the engine shows up at the WATCHDOG (dead -> -EIO, the
+     * framework then drops + stops, engine still plays its small ring
+     * tail after our close -- no truncation on a healthy engine). */
+    while (1) {
+        hat_consume_advance(st, hat_now_ns());
+        if (st->dead) {
+            /* the engine stopped chewing mid-drain (stall past the
+             * watchdog): close the job and report -EIO -- which this
+             * framework turns into a drop while DRAINING
+             * (pcm_ioplug.c:497 snd_pcm_ioplug_drop), so hat_stop()
+             * frees the socket and the client goes through the normal
+             * XRUN recovery. We cannot keep waiting: the engine is not
+             * going to chew. */
+            hat_disconnect(st);
+            return -EIO;
+        }
+        if (st->sent == 0)
+            return 0;                    /* never started: nothing to chew */
+        if (st->consumed < st->sent) {
+            hat_sleep_ms(10);            /* engine still chewing */
+            continue;
+        }
+        hat_sleep_ms((unsigned int)(HAT_RING_NS / 1000000ull));
+        return 0;                        /* chewed + ring margin: drop */
+    }
 }
 
 static void hat_dump(snd_pcm_ioplug_t *io, snd_output_t *out)
@@ -419,8 +673,13 @@ static void hat_dump(snd_pcm_ioplug_t *io, snd_output_t *out)
                       (unsigned long)st->rate, st->channels,
                       st->dir == 0 ? "identity" :
                       st->dir == 1 ? "upsample" : "downsample");
-    snd_output_printf(out, "hat: 48 kHz samples sent so far: %llu\n",
-                      (unsigned long long)st->mass);
+    snd_output_printf(out, "hat: 48 kHz samples -> sent %llu (consumed "
+                      "%llu, in flight %llu)\n",
+                      (unsigned long long)st->sent,
+                      (unsigned long long)st->consumed,
+                      (unsigned long long)(st->sent - st->consumed));
+    snd_output_printf(out, "hat: frames reported to client: %ld\n",
+                      (long)(st->frames_sent > 0 ? st->frames_sent : 0));
 }
 
 static int hat_close(snd_pcm_ioplug_t *io)
