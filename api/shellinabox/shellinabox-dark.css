@@ -1,0 +1,93 @@
+/*
+ * gamepi-shellinabox-dark-theme v1 (managed by setup.sh — do not hand-edit
+ * the deployed copy at /usr/local/lib/shellinabox-dark.css; edit this file
+ * in the repo).
+ *
+ * Served by shellinaboxd --css=…: the file's content is appended to the
+ * client's own stylesheet, whose file is loaded first — so at equal
+ * specificity these rules win over the shipped light theme. Everything is
+ * scoped to the page's real structure (shellinabox 2.21: #vt100 root,
+ * #scrollable/#console terminal, #menu popup, #keyboard widget,
+ * .ansiN/.bgAnsiN palette classes).
+ *
+ * Palette = the dashboard's (api/www/style.css): bg #0b0e14, ink #dbe2ee,
+ * accents #1f6feb / #38d17f, panels #1e2432, dim #7d8aa0, line #7d8aa0.
+ */
+
+/* ── page + terminal canvas ── */
+body, html { background: #0b0e14; }
+#vt100 { background-color: #0b0e14; color: #dbe2ee; }
+#vt100 #scrollable,
+#vt100 #console,
+#vt100 #alt_console { background-color: #0b0e14; color: #dbe2ee; }
+#vt100 pre { color: #dbe2ee; }
+
+/* explicit-white backgrounds the light theme paints (selected regions,
+   inverted-default text) — flip to the deck dark */
+#vt100 .bgAnsiDef { background-color: #0b0e14; }
+#vt100 .bgAnsiDefR { background-color: #141a26; }
+#vt100 .ansiDef { color: #dbe2ee; }
+#vt100 .ansiDefR { color: #0b0e14; }
+
+/* ── ANSI palette (16 base) — contrast-tuned for the #0b0e14 canvas;
+      the 256-color .ansi16–.ansi255 ramp is left as shipped ── */
+#vt100 .ansi0 { color: #7d8aa0; }
+#vt100 .ansi1 { color: #ff5f56; }
+#vt100 .ansi2 { color: #38d17f; }
+#vt100 .ansi3 { color: #f5b942; }
+#vt100 .ansi4 { color: #1f6feb; }
+#vt100 .ansi5 { color: #cd00cd; }
+#vt100 .ansi6 { color: #00cdcd; }
+#vt100 .ansi7 { color: #e5e5e5; }
+#vt100 .ansi8 { color: #7d8aa0; }
+#vt100 .ansi9 { color: #ff8a84; }
+#vt100 .ansi10 { color: #57e39b; }
+#vt100 .ansi11 { color: #ffd47e; }
+#vt100 .ansi12 { color: #6ca4f5; }
+#vt100 .ansi13 { color: #ff7cf0; }
+#vt100 .ansi14 { color: #40e0e0; }
+#vt100 .ansi15 { color: #ffffff; }
+
+/* matching background classes (region highlights from ANSI bg escapes) */
+#vt100 .bgAnsi0 { background-color: #0b0e14; }
+#vt100 .bgAnsi1 { background-color: #4a1512; }
+#vt100 .bgAnsi2 { background-color: #0f3d24; }
+#vt100 .bgAnsi3 { background-color: #3d3210; }
+#vt100 .bgAnsi4 { background-color: #112744; }
+
+/* ── cursor ── */
+#vt100 #cursor.bright { background-color: #1f6feb; color: #ffffff; }
+#vt100 #cursor { border-color: #1f6feb; }
+
+/* ── links ── */
+#vt100 a { color: #6ca4f5; }
+#vt100 a:hover { color: #ffffff; }
+
+/* ── menu popup ── */
+#vt100 #menu .popup,
+#vt100 #menu .popup ul { background-color: #1e2432; border-color: #3a4256; color: #dbe2ee; }
+#vt100 #menu .popup li { color: #dbe2ee; }
+#vt100 #menu .popup li.hover { background-color: #1f6feb; color: #ffffff; }
+#vt100 #menu .popup li.disabled { color: #7d8aa0; }
+#vt100 #menu .popup hr { border-color: #3a4256; }
+
+/* ── keyboard widget + cursize / reconnect overlays ── */
+#vt100 #keyboard .box { background-color: #1e2432; border: 1px solid #3a4256; }
+#vt100 #keyboard b, #vt100 #keyboard i, #vt100 #keyboard s, #vt100 #keyboard u {
+  background-color: #232b3d; color: #dbe2ee;
+}
+#vt100 #keyboard .selected { background-color: #1f6feb; color: #ffffff; box-shadow: none; }
+#vt100 #kbd_button { background-color: #1e2432; color: #dbe2ee; }
+#vt100 #cursize { background: #1e2432; color: #dbe2ee; border: 1px solid #3a4256; }
+#vt100 #reconnect input { background-color: #1e2432; color: #dbe2ee; }
+
+/* ── scrollbars ── */
+#vt100 #scrollable { scrollbar-color: #3a4256 #0b0e14; }
+#vt100 #scrollable::-webkit-scrollbar { width: 10px; background: #0b0e14; }
+#vt100 #scrollable::-webkit-scrollbar-thumb { background: #3a4256; border-radius: 5px; }
+
+/* ── selection + form focus ── */
+#vt100 ::selection,
+#vt100 *::selection { background: rgba(31, 111, 235, 0.45); }
+input, textarea { accent-color: #1f6feb; }
+input:focus, textarea:focus { outline-color: #1f6feb; }

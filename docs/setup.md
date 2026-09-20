@@ -23,27 +23,31 @@ next repair run converges away.
 | `/root/armbianEnv.txt.before-gamepi` | setup.sh | Created once, on the first overlay edit, as a one-time safety backup. Never churned again. |
 | `/usr/local/bin/xvfb-to-st7789.py` | setup.sh | Compare-then-write against the §6 template. |
 | `/usr/local/bin/hat-sound` | setup.sh | Rebuilt from the tracked `tools/hat-sound.c` (canonical flags, `-lm -lpthread`) on every run; **compare-then-install** — installed only when the bytes differ, and the `gamepi-sound` unit is restarted onto the new binary in the unit-repair step (a binary change is a unit change in disguise). |
-| `/etc/systemd/system/gamepi-{xvfb,openbox,vnc,lcd,sound}.service` | setup.sh | Compare-then-write against the §6 templates. |
+| `/etc/systemd/system/gamepi-{xvfb,openbox,vnc,lcd,sound,websockify,shellinabox}.service` | setup.sh | Compare-then-write against the §6 templates. The two bridge units (browser SSH/VNC, plan 2026-09-20-10-47-32): `gamepi-websockify` runs `websockify 0.0.0.0:6080 127.0.0.1:5900` (all-interface WS listen, loopback RFB dial — see "Browser access"); `gamepi-shellinabox` runs `shellinaboxd` as the deb's own system user with a managed pidfile, `Type=forking`, `--disable-ssl` (plain HTTP; TLS belongs at a real reverse proxy), `--css /usr/local/lib/shellinabox-dark.css` (managed dark theme — the css shipped inside the binary is light, so the theme is *appended* after it; row 24), `:4200`. A `shellinabox` PAM file is a managed artifact too — without `/etc/pam.d/shellinabox` every web session fails auth (row 20). |
+| `/etc/pam.d/shellinabox` | setup.sh | Compare-then-write, root:root 0644: `auth`/`account`/`password` include `common-*` + `session required pam_env.so` + `session include common-session` — exactly the PAM stack sshd uses, plus `pam_env`. The deb ships none. The PAM service name `shellinabox` is hard-coded inside `shellinaboxd`. |
+| `/etc/default/shellinabox` | setup.sh | Compare-then-write, root:root 0644: **`SHELLINABOX_DAEMON_START=0`** — the vendor sysvinit script must start no daemon of its own, or it holds `0.0.0.0:4200` at boot and `gamepi-shellinabox` bounces with `Failed to find any available port!` (field evidence 2026-09-20). With the S-start links removed and any stray stopped, setup.sh also owns a converge step that keeps the vendor init path disabled: `update-rc.d shellinabox disable` + `/etc/init.d/shellinabox stop` (the script's own stop is `start-stop-daemon --oknodo`, safe to call always) + `systemctl reset-failed gamepi-shellinabox`. The K01 stop links are left — harmless no-ops once nothing starts. Drift detection covers the rc **S**-start links and any `shellinaboxd` outside this unit's process tree (the daemon's `--background` parent+child pair is ours, not a stray). |
+| `/usr/local/lib/shellinabox-dark.css` | setup.sh | Compare-then-write from `api/shellinabox/shellinabox-dark.css`, root:root 0644: the managed dark theme for the ShellInABox client. The package ships no client files on disk — only the light stylesheet inside the binary — and `shellinaboxd --css=FILE` *appends* the file's content after that built-in css, so at equal specificity the theme wins. It lives under `/usr/local` because package upgrades never touch it (an apt upgrade of `shellinabox` cannot clobber it). The restart gate re-applies it whenever the unit file changes this run (the unit carries the flag), and verify row 24 proves it reaches the browser: the dashboard bg marker `0b0e14` must appear in the css the daemon serves at `/shell/styles.css`. The palette is the dashboard's (`api/www/style.css`). |
 | `/run/gamepi-sound.sock` | `gamepi-sound` engine | **Transient, not setup.sh content.** `/run` is tmpfs — cleared at boot; the v3.6 daemon binds the socket at unit start (0666 via `fchmod(fd)` **and** `chmod(path)` — field finding 2026-09-15: on this vendor kernel/tmpfs a bare `fchmod` does not move the path-mode view that `connect()`/`stat()` use, so the engine does both), and unlinks it on exit. Verify row 12 probes its presence. No `RuntimeDirectory` in the unit — the socket sits directly in `/run`, which is wipe-cleared independently. |
 | `/etc/sysctl.d/99-sched-rt.conf` | setup.sh | Compare-then-write: `kernel.sched_rt_runtime_us = -1`. Applied by `systemd-sysctl` (static) at every boot. The board has no `sysctl` binary; the runtime value is already `-1` here, the file is what makes it survive reboots (see Sound). |
 | `/boot/overlay-user/{es8388-audio,i2c0}.dtbo` (older: `/boot/armbian-overlays/`) | setup.sh | **Removed** (logged) when present: wrong-audio-path probe leftovers — the HAT amp is GPIO/PWM pin 12, not I2S, so these bind nothing (verified 2026-09-15: no `i2c-0`, no extra ALSA card). Never re-added. |
 | `<DECK_USER>/.config/openbox/autostart` | setup.sh | Compare-then-write against the §6 template (byte-strict). The auto-launched xterm is sized to fit the 960x960 :1 canvas (see the in-template comment in setup.sh §6: the Xvfb is 100 DPI, so `-fs` point-size + columns must stay ≤ ~952 px, else the window overflows the screen). |
 | `<DECK_USER>/.vnc/passwd` | **the user** | Created (with the provided password, or a generated one) only if absent. Never overwritten, never deleted, no reset flag. Rotation is a manual act: `sudo rm <file>`, re-run with `--vnc-pass` (password is max 8 chars — VNC uses the first 8). |
-| System packages + `default.target=multi-user` | setup.sh (idempotent apt/systemctl) | Re-asserted on every run; apt only runs when something is missing. |
+| System packages + `default.target=multi-user` | setup.sh (idempotent apt/systemctl) | Re-asserted on every run; apt only runs when something is missing. The package list includes the two browser-bridge packages, `websockify` and `shellinabox`; the distro `novnc` package is deliberately **not** installed (its nodejs + net-tools dependency chain is ~106 MB of toolchain that runs nothing here) — the noVNC client is vendored instead (www row). |
 | `/var/lib/micro-cyberdeck/*` (stamp + audit log + `apache.loaded-sig`) | setup.sh | Host-local bookkeeping (git-ignored). The stamp gates the reboot decision; `apache.loaded-sig` records the last reloaded Apache web state (conf + mod enables — see the conf row). Never hand-edit it; if it becomes suspect, delete the directory — the next run re-derives (a missing sig costs one extra reload, nothing else). |
 | Ollama model library (local API `http://localhost:11434`) | setup.sh (host `ollama` CLI, `docker exec ollama` fallback) | **Verify-or-pull.** `OLLAMA_MODELS` (`qwen3.5:2b`, `qwen3.5:2b-q8_0`) must be in the local library (Ollama tag convention: exactly one colon separates name from tag — the Q8_0 variant is tag `2b-q8_0`, not `2b:q8_0`, which the registry rejects as `400 Bad Request: invalid model name`) — they are the models pipelines point at through `api.yaml` (Ollama runs **CPU-only** on this SoC; see `docs/hardware/npu.md`). The service install is **not** setup.sh's: on the current board `ollama serve` is a root **Docker container** (name `ollama`, 11434 published; model volume `/var/lib/docker/volumes/ollama/_data` ↔ `/root/.ollama` inside the container) and the host has no `ollama` CLI. Pulls try the host CLI first, then `docker exec ollama ollama pull <name>`; an unreachable API or an unresolvable pull path is reported as verify FAIL / plan DRIFT, not repaired. Absent models are pulled before the verify row runs; a successful second run therefore pulls nothing. `OLLAMA_HOST` overrides are drift — the deck's service is expected on localhost:11434. |
 | `api/go` → `/opt/cyberdeck/cyberdeck-api` | setup.sh via `api/go/install.sh` | The Go build of `api/go` (stdlib only, CGO off → one static binary). **Source+binary hash-marker rebuild-skip** (marker `/var/lib/micro-cyberdeck/cyberdeck-api.src-hash`, written by install.sh): a converged re-run rebuilds nothing; a replaced or missing binary — or edited sources — is detected and rebuilt + restarted. In plan mode setup.sh re-derives the same decision itself (no build). |
 | `/etc/systemd/system/cyberdeck-api.service` | setup.sh via `api/go/install.sh` | Compare-then-install from the `api/go/systemd/cyberdeck-api.service` template; `daemon-reload` only when the file was written; **restart only when the binary or unit file changed this run** (a binary change is a unit change in disguise — same rule as `gamepi-sound`); an inactive unit gets `enable --now`; a running-but-unenabled unit gets `enable` for boot persistence. |
-| `/etc/apache2/conf-available/cyberdeck.conf` (+ `conf-enabled` symlink) | setup.sh | Compare-then-write from `api/apache/cyberdeck.conf`; `a2enmod proxy proxy_http` + `a2enconf cyberdeck` run once, idempotently. Keeps the default DocumentRoot and adds only the `/api/` → `127.0.0.1:8080/api/` proxy (the `/api/` prefix is preserved — the Go mux registers its data routes under `/api/`, so a bare-root target would strip it and 404). Apache's **loaded** state converges via `$MARK_DIR/apache.loaded-sig`: when the on-disk conf/module state differs from the last reloaded one, Apache is reloaded and the sig re-stamped — repairing even a run that exited before its own reload; a converged re-run reloads nothing. |
-| `/var/www/html/**` (contents of `api/www/`) | setup.sh | Per-file compare-then-deploy (`install -m 644`): a converged re-run writes no bytes; a deleted remote file is **not** auto-removed (upsert-only sync). `index.html` becomes the page root, replacing the distro placeholder on the first deploy. The vendored Chart.js pin — v4.4.1 UMD, sha256 `74401d738dd3e03ee5dfb3b6841210fe2c4ead8a960c4011ca4ba0b78a9fd8f3` (205125 bytes) — ships inside `api/www/vendor/` and is re-checked by this per-file compare on every run. Apache reloads only on a conf/module state change (sig-stamped — see the conf row); the www deploy needs no reload (files are read per request). |
+| `/etc/apache2/conf-available/cyberdeck.conf` (+ `conf-enabled` symlink) | setup.sh | Compare-then-write from `api/apache/cyberdeck.conf`; `a2enmod proxy proxy_http proxy_wstunnel` + `a2enconf cyberdeck` run once, idempotently (the module's *a2enmod name* is `proxy_wstunnel` — `a2enmod wstunnel` fails; the .so inside is `mod_proxy_wstunnel`). Keeps the default DocumentRoot and adds the `/api/` → `http://127.0.0.1:8080/api/` proxy (the `/api/` prefix is preserved — the Go mux registers its data routes under `/api/`, so a bare-root target would strip it and 404), the `/shell/` → `http://127.0.0.1:4200/` proxy, and the `/vnc/websockify` → `ws://127.0.0.1:6080/websockify` WebSocket tunnel (see "Browser access"). `wstunnel` is part of the managed module set — it enters the loaded-state sig, like the others. Apache's **loaded** state converges via `$MARK_DIR/apache.loaded-sig`: when the on-disk conf/module state differs from the last reloaded one, Apache is reloaded and the sig re-stamped — repairing even a run that exited before its own reload; a converged re-run reloads nothing. |
+| `/var/www/html/**` (contents of `api/www/`) | setup.sh | Per-file compare-then-deploy (`install -m 644`): a converged re-run writes no bytes; a deleted remote file is **not** auto-removed (upsert-only sync). `index.html` becomes the page root, replacing the distro placeholder on the first deploy. The vendored Chart.js pin — v4.4.1 UMD, sha256 `74401d738dd3e03ee5dfb3b6841210fe2c4ead8a960c4011ca4ba0b78a9fd8f3` (205125 bytes) — ships inside `api/www/vendor/` and is re-checked by this per-file compare on every run. The deploy also carries the vendored noVNC static client in `api/www/vnc/` (page at `/vnc/vnc.html`, version pin in `api/www/vnc/SOURCE`) — the browser-access client half. Apache reloads only on a conf/module state change (sig-stamped — see the conf row); the www deploy needs no reload (files are read per request). |
 Hand edits to any "setup.sh-owned" file are **drift by definition**; the next
 run repairs them. If you need a permanent custom change, change the template in
 §5 of `setup.sh` (and document it here) — the script converges to its templates,
 never to the filesystem.
 
-The five `gamepi-*.service` files, the sound binary, the bridge script, the
-sysctl drop-in, and the autostart are **byte-canonical with the verified live
-configuration**: setup.sh templates them
+The seven `gamepi-*.service` files, the sound binary, the bridge script, the
+sysctl drop-in, the autostart, the `/etc/pam.d/shellinabox` file, the `/usr/local/lib/shellinabox-dark.css` theme, and the
+`/etc/default/shellinabox` conffile are
+**byte-canonical with the verified live configuration**: setup.sh templates them
 from its §6 section and compare-then-write — identical bytes never touch disk,
 so the script can be re-run without ever disturbing a healthy machine. One
 deliberate, documented deviation: the `gamepi-lcd` unit carries
@@ -100,7 +104,8 @@ agents get flags, stable exit codes, and one parseable result line.
    sections of the script). Every write is compare-then-write: identical
    bytes never touch disk. After the deck artifacts: (h) web UI + metrics
    API — confirm `apache2` landed after the package step, then
-   `a2enmod proxy proxy_http` + `a2enconf cyberdeck` (idempotent), then
+   `a2enmod proxy proxy_http proxy_wstunnel` + `a2enconf cyberdeck` (idempotent),
+   then
    `api/go/install.sh` (source+binary hash-marker rebuild-skip, unit
    compare-install, `daemon-reload` only when the unit was written, restart
    only when the binary/unit changed this run — same rule as
@@ -127,7 +132,9 @@ agents get flags, stable exit codes, and one parseable result line.
 
 `--plan` replaces the write half of converge with a desired-vs-current
 comparison (unit files, sound source, sysctl drop-in, bridge, autostart,
-overlay lines + stale overlays, packages, and the web API: the
+overlay lines + stale overlays, packages, the ShellInABox PAM file, the vendor
+shellinabox conffile + init-takeover state (S-start links, stray `shellinaboxd`
+outside the unit's process tree), and the web API: the
 re-derived install.sh decisions via the hash markers, the Apache conf /
 enabled modules, and the www deploy), then runs verify. It writes **not a
 single** byte — no files, no apt, no systemctl, no stamp, no log line —
@@ -145,7 +152,7 @@ Reboot mode flags are ignored in plan mode and never recorded.
 | 4 | VNC password exists | `<home>/.vnc/passwd` exists, non-empty |
 | 5 | SPI overlay active | `overlays=` contains `spi3-cs0-cs1-spidev` AND `user_overlays=spi3-cs0-<MHZ>mhz` (exact value); `/dev/spidev3.0` exists |
 | 6 | Bridge bound + screen size OK | `systemctl is-active gamepi-lcd.service`; `journalctl -u gamepi-lcd` **since the unit's current `ExecMainStartTimestamp`** contains `X11 root: 960x960` (the line is printed once at process start; anchoring to the current start avoids both the stale-evidence trap and a dead unit passing on old lines) |
-| 7 | Units all active | `systemctl is-active` for all five `gamepi-*` units (incl. `gamepi-sound` — the v3.6 socket engine daemon) |
+| 7 | Units all active | `systemctl is-active` for all seven `gamepi-*` units (the loop `xvfb openbox vnc lcd sound websockify shellinabox`): xvfb, openbox, vnc, lcd, sound (the v3.6 socket engine daemon), websockify, shellinabox (incl. the two browser-bridge units, plan 2026-09-20-10-47-32) |
 | 8 | SPI clock | `cat /sys/class/spi-master/spi3/max_speed_hz` (informational; logged, not gating) |
 | 9 | RT budget live + persisted | `cat /proc/sys/kernel/sched_rt_runtime_us` == `-1` (the drop-in persists it across reboots; the board has no `sysctl` binary, so the read is from `/proc`) |
 | 10 | Audio topology as intended | `/proc/asound/cards` contains exactly one card, `allwinnerhdmi` (the HAT amp is GPIO/PWM pin 12 — any second card means something bound an I2S path that should not exist here) |
@@ -156,6 +163,13 @@ Reboot mode flags are ignored in plan mode and never recorded.
 | 15 | Loopback /health | `curl -sf http://127.0.0.1:8080/health` returns `"ok":true` (the API must bind 127.0.0.1 only — a wider bind is drift) |
 | 16 | Apache `/api/` proxy | `curl -sf http://localhost/api/metrics` (through Apache) reports `temps.cpub_thermal_zone` |
 | 17 | Dashboard served | `curl -sf http://localhost/` contains `<!doctype html>` and the `cyberdeck-system-marker` marker — i.e., the deck dashboard, not the distro placeholder ("It works" / "Ubuntu Default Page") |
+| 18 | Dashboard access links | `curl -sf http://localhost/` contains the Access card's two routes (`/vnc/vnc.html` and `/shell/`) |
+| 19 | websockify bridge (noVNC WS front) | `ss -lnt` shows an all-interface bind (`0.0.0.0:*`, `[::]:*`, or `*:*` — the trusted-LAN posture, decision D6 of plan 2026-09-20-10-47-32; a loopback-only bind is drift) on `:6080`, and a hand-rolled WebSocket upgrade GET to `127.0.0.1:6080` is answered `101 Switching Protocols` (the same handshake the noVNC client sends; websockify answers a plain GET with 405, so only a real WS client passes) |
+| 20 | ShellInABox bridge (web SSH) | `systemctl is-active gamepi-shellinabox.service == active`; `ss -lnt` shows an all-interface bind on `:4200` (row-19 rule); `curl -sf http://localhost/shell/` (through Apache) serves the ShellInABox PAM login page |
+| 21 | ShellInABox PAM file | `/etc/pam.d/shellinabox` exists, non-empty, `-rw-r--r-- root` — the managed PAM stack; without it `pam_start("shellinabox")` has nothing to read and every session fails auth |
+| 22 | Apache WS tunnel | `mods-enabled/proxy_wstunnel.load` present (the managed module set — the **a2enmod name** is `proxy_wstunnel`; the .so is `mod_proxy_wstunnel`) and the managed conf carries the `ProxyPass /vnc/websockify ws://127.0.0.1:6080/websockify` rule |
+| 23 | noVNC client served | `curl -sf http://localhost/vnc/vnc.html` serves the vendored noVNC page (`<title>noVNC</title>`); its WebSocket target is the same-origin `/vnc/websockify` (row 22) |
+| 24 | ShellInABox dark theme | `/usr/local/lib/shellinabox-dark.css` exists non-empty, **and** the dashboard bg marker `0b0e14` appears in the css the daemon serves at `http://localhost/shell/styles.css` (through Apache). `shellinaboxd --css=FILE` is embedded into the *served stylesheet*, so its presence in that response is direct proof the theme reaches the browser; a stale unit without the flag shows the light css and this row FAILs (user-directed follow-up, 2026-09-20) |
 
 Implementation notes (live-verified pitfalls, fixed 2026-09-15 — do not revert):
 
@@ -181,10 +195,10 @@ Only overlay changes require a real reboot: any `armbian-add-overlay`
 call whose output actually differs (new `.dtbo`), or a change to the
 `overlays=`/`user_overlays=` lines in `armbianEnv.txt`. Everything else —
 service files, the sound binary, the bridge, the sysctl drop-in, autostart,
-packages, hostname, VNC password, stale-overlay removals, and the web UI +
-metrics API artifacts (binary, unit, Apache conf, www deploy) — is repaired
-live or takes effect on the next unit start / next boot, and never needs a
-reboot.
+packages, hostname, VNC password, stale-overlay removals, the ShellInABox
+PAM file, and the web UI + browser-bridge artifacts (binary, unit, Apache
+conf + module enables, www deploy) — is repaired live or takes effect on the
+next unit start / next boot, and never needs a reboot.
 The sysctl drop-in is applied by `systemd-sysctl` at boot; verify proves the
 runtime value from `/proc` either way (and a drop-in write alone never sets
 the reboot flag — the stamp covers overlay state only).
@@ -239,7 +253,7 @@ Consequences:
 | Code | Meaning |
 |---|---|
 | 0 | Converged and verify passed; machine is working (or, in `--plan`, no drift and verify passed). |
-| 1 | Drift and/or verify failure. `--plan`: differences detected, nothing applied. Apply mode: drift repaired but post-verify found failures. The `RESULT:` line names the failing items. |
+| 1 | Drift and/or verify failure. `--plan`: differences detected, nothing applied (`RESULT: DRIFT:<n>`). Apply mode: drift was repaired but post-verify found failures (`RESULT: INCOMPLETE:verify`, names above). An apply run that changed files **and** passed verify is a success — exit 0 with `RESULT: DRIFT:<n-changed>` (the number is the changed-files count, not a failure count). The `RESULT:` line names the failing items. |
 | 2 | Preflight environment failure (not root, wrong board, missing tool, unknown user, conflicting flags). `RESULT: PREFLIGHT_FAILED:<reason>`. |
 | 3 | Converged and verify passed, but a reboot is required and was not performed. `RESULT: CONVERGED_REBOOT_PENDING`. |
 | 130 | Ctrl+C during a write. Script prints a truthful state summary and exits 130 (framework invariant: no silent aborts). |
@@ -360,10 +374,45 @@ these dtbos bind nothing — a zombie probe at every boot.
   dashboard and `/api/` (distro default, not a managed row).
 - **Proxy:** `/etc/apache2/conf-available/cyberdeck.conf`
   (`ProxyPass /api/` → `http://127.0.0.1:8080/api/` — the prefix is kept,
-  matching the Go routes) plus `a2enmod proxy proxy_http` +
+  matching the Go routes; `ProxyPass /shell/` → `http://127.0.0.1:4200/` —
+  trailing-slash pair, prefix mapped to root, since the ShellInABox 2.21
+  terminal is XHR-POST, not WebSocket, so a plain HTTP proxy is enough;
+  `ProxyPass /vnc/websockify` → `ws://127.0.0.1:6080/websockify` under
+  `mod_proxy_wstunnel`) plus `a2enmod proxy proxy_http proxy_wstunnel` +
   `a2enconf cyberdeck`, idempotent; Apache's loaded state is
   reloaded-vs-stamped by sig (`apache.loaded-sig`), so an interrupted run is
   repaired on the next one.
+- **Browser access (noVNC + ShellInABox):** SSH and VNC are reachable from a
+  stock browser, no client software (plan 2026-09-20-10-47-32):
+  - **Desktop** — `/vnc/vnc.html` serves the vendored noVNC static client from
+    the docroot; the page opens its WebSocket at the same-origin
+    `/vnc/websockify`, which `mod_proxy_wstunnel` forwards to
+    `gamepi-websockify` (`websockify 0.0.0.0:6080 127.0.0.1:5900`). The RFB
+    leg websockify dials is loopback-only — raw VNC never crosses the wire;
+    the `0.0.0.0:6080` WS leg is LAN-reachable by design (decision D6).
+    Auth is the existing x11vnc password (row 4).
+  - **Terminal** — `/shell/` proxies to `gamepi-shellinabox`
+    (`shellinaboxd` on `0.0.0.0:4200`, the deb's system user). The client
+    page is **dark-themed** in the dashboard palette: a managed
+    `api/shellinabox/shellinabox-dark.css` is deployed to
+    `/usr/local/lib/shellinabox-dark.css` and appended after the binary's
+    built-in (light) css via the unit's `--css` flag (row 24). Login is PAM
+    against the managed `/etc/pam.d/shellinabox` (rows 19–20) — the same
+    credentials as real SSH — and the session is then a native SSH login
+    shell.
+  - **Trusted-LAN posture (stated, D6):** both bridges add browser-reachable
+    auth surfaces on unauthenticated HTTP :80 — and, with their `0.0.0.0`
+    binds, the same surfaces directly on :4200/:6080. Same trust baseline as
+    the existing `sshd :22` / `x11vnc :5900` exposure, per the operator's
+    "bind to 0.0.0.0" direction; a loopback-only bind on either port is
+    drift (rows 18–19). Auth/TLS + action endpoints remain deferred (plan
+    2026-09-19-23-23-36, §3.1).
+  - The distro `novnc` package is deliberately **not** installed (nodejs +
+    net-tools, ~106 MB of unused toolchain): only the static client is
+    vendored (`api/www/vnc/`, pin in its `SOURCE` note), and the only new apt
+    packages are `websockify` and `shellinabox`.
+  - The dashboard's Access card links both lanes: *Desktop → /vnc/vnc.html*
+    and *Terminal → /shell/"* (row 23).
 
 The browser-facing surface is therefore Apache on `:80` (all interfaces —
 http://<board-ip>/ from the LAN); the metrics origins are loopback-only.
@@ -376,7 +425,17 @@ minutes plus the live in-progress bucket as the moving final point).
 healthy deck, suspect the API, not Apache — rows 14 → 15 → 16 isolate
 service → loopback → proxy in order, and `journalctl -u cyberdeck-api`
 covers the server side. A "It works"/placeholder page at `/` means the www
-deploy did not land (row 17): re-run converge.
+deploy did not land (row 17): re-run converge. For the browser bridges:
+a canvas that loads but goes blank = the RFB leg (x11vnc + the websockify
+tunnel — rows 18 → 21); `/shell/` serving the login page but every login
+failing = the PAM file (row 20) or a wrong password; `gamepi-shellinabox`
+says `Failed to find any available port!` after a reboot = the vendor
+sysvinit path took `:4200` back (stray `shellinaboxd` + its conffile back at
+`DAEMON_START=1`) — re-run converge: the takeover step (the
+`/etc/default/shellinabox` scope-table row) disables the rc links, stops the
+stray, and resets the failed unit.
+`journalctl -u
+gamepi-websockify -u gamepi-shellinabox` covers the bridge side.
 
 ## Agent usage (recommended loop)
 

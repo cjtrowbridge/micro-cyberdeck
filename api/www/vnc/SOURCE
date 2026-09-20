@@ -1,0 +1,18 @@
+noVNC 1.6.0 (@novnc/novnc 1.6.0, see package.json)
+
+Vendored 2026-09-20 from Debian trixie's novnc_1:1.6.0-2_all.deb
+(sha256 7943751137815b9b98c7b424413de78aefa8a1045129ac06c001e9e68e0de98e)
+— /usr/share/novnc as packaged. The dev-only utils/ tree (novnc_proxy,
+u2x11, validate, code generators) was removed: nothing in the client or
+the Apache wstunnel bridge path references it. The distro novnc package
+is deliberately NOT installed (its nodejs + net-tools dependency chain is
+~106 MB of toolchain we never run); only the static client is needed.
+
+Licensing (from the deb's copyright file): MPL-2.0 (core/, js modules),
+BSD-2-Clause (*.html, app/styles/*.css, des.js), OFL-1.1 (Orbitron font in
+app/styles), CC-BY-SA-3.0 (app/images/*), Expat/Pako for vendor/pako
+(Zlib for vendor/pako/lib/zlib, derived from zlib). See file headers.
+
+Deployed by setup.sh to /var/www/html/vnc/ (page at /vnc/vnc.html); the
+WebSocket endpoint is proxied via mod_proxy_wstunnel (see
+api/apache/cyberdeck.conf). Plan 2026-09-20-10-47-32.

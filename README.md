@@ -145,6 +145,12 @@ sudo bash setup.sh
 - VS Code: the **GamePi: set up the machine** task / play action
   (`.vscode/`) runs the same command in an integrated terminal, so the sudo
   prompt and the one reboot question stay visible and answerable.
+- Browser access, no client software: the dashboard's Access card links
+  **Desktop** (`/vnc/vnc.html` — noVNC over the websockify bridge on :6080,
+  VNC password) and **Terminal** (`/shell/` — ShellInABox on :4200, PAM
+  login, same credentials as SSH); both bind 0.0.0.0 on a trusted-LAN
+  board and are reached same-origin through Apache on :80 (details in
+  `docs/setup.md`, "Browser access").
 - The display is a single 960x960 `:1` desktop by design (the ST7789 panel
   is 4:1 down-scaled from it; VNC serves the 960 view on 5900). The one-time
   480->960 migration is complete and its rescue scripts retired (2026-09-19);

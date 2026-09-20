@@ -77,6 +77,12 @@ DESIRED_BOARD_MODEL="orange pi zero 3w"   # /proc/device-tree/model (lowercased)
 DESIRED_BOARD_ID="orangepizero3w"         # BOARD= in /etc/armbian-release
 DESIRED_OVERLAY_CORE="spi3-cs0-cs1-spidev"
 DESIRED_VNC_PORT=5900
+# Browser bridges (plan 2026-09-20-10-47-32): the noVNC WebSocket proxy
+# (websockify, LAN :6080 -> loopback x11vnc :5900) and the ShellInABox
+# terminal daemon (LAN :4200). Both units bind 0.0.0.0 — trusted-LAN
+# posture (docs/setup.md "Browser access").
+DESIRED_WEBSOCKIFY_PORT=6080
+DESIRED_SHELLINABOX_PORT=4200
 # Local inference (docs/hardware/npu.md — Ollama runs CPU-only on this SoC).
 # The models the deck's pipelines are expected to be able to point at.
 # setup.sh does not manage the service's install (current deployment: a
@@ -105,6 +111,11 @@ WEB_BIN="/opt/cyberdeck/cyberdeck-api"
 WEB_ROOT="/var/www/html"
 APACHE_CONF_SRC="api/apache/cyberdeck.conf"         # repo-relative
 APACHE_CONF_DST="/etc/apache2/conf-available/cyberdeck.conf"
+# ShellInABox dark theme (deck palette, plan 2026-09-20-10-47-32 follow-up):
+# the client's stylesheet is light; shellinaboxd supports --css=FILE (content
+# appended after the client css) — that is the theming hook.
+SHELLINABOX_CSS_SRC="api/shellinabox/shellinabox-dark.css"  # repo-relative
+SHELLINABOX_CSS_DST="/usr/local/lib/shellinabox-dark.css"
 APACHE_SIG="$MARK_DIR/apache.loaded-sig"            # sig of apache's last (re)load
 
 HOSTNAME_DESIRED="micro-cyberdeck"
@@ -729,6 +740,76 @@ RestartSec=1
 WantedBy=multi-user.target
 EOF
       ;;
+    websockify)
+      cat <<EOF
+[Unit]
+Description=GamePi noVNC WebSocket proxy (browser -> x11vnc)
+# Ordering only, no Requires: websockify tolerates a down target and
+# retries per-connection, so x11vnc lagging at boot is self-healing.
+After=network.target gamepi-vnc.service
+
+[Service]
+Type=simple
+# 0.0.0.0 bind (trusted-LAN posture, decision D6): this port is the
+# browser-reachable edge for noVNC. The TARGET stays a loopback dial into
+# x11vnc, so the RFB protocol never crosses the LAN — only the WS tunnel
+# does, with Apache (proxy_wstunnel) as the normal front.
+ExecStart=/usr/bin/websockify 0.0.0.0:${DESIRED_WEBSOCKIFY_PORT} 127.0.0.1:${DESIRED_VNC_PORT}
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
+EOF
+      ;;
+    shellinabox)
+      cat <<EOF
+[Unit]
+Description=GamePi ShellInABox web terminal (browser -> SSH credentials)
+After=network.target
+
+[Service]
+# forking: shellinaboxd daemonizes (-q --background=<pidfile>) — the parent
+# exits immediately and the child is the real daemon; with Type=main
+# systemd would watch the wrong (short-lived) process. Child is tracked
+# via the pidfile below.
+Type=forking
+# Runs as the deb's own (system) user — no deck user is involved: sessions
+# authenticate THROUGH the daemon via PAM (/etc/pam.d/shellinabox, managed
+# in §(d2)) and start the logged-in user's login shell. systemd does the
+# privilege change (User=/Group=) — the vendor init script instead passed
+# -u/-g to the binary; both models arrive at the same runtime uid.
+User=shellinabox
+Group=shellinabox
+# Vendor init-script defaults: datadir as chroot-dir (the deb's postinst
+# addusers /var/lib/shellinabox as the shellinabox home; StateDirectory
+# re-creates it, chowned right, if it is ever missing).
+StateDirectory=shellinabox
+WorkingDirectory=/var/lib/shellinabox
+RuntimeDirectory=shellinabox
+# -q --background=<pidfile>: quick mode + daemonize with pidfile.
+# -c <datadir>: the vendor init script serves from the datadir (chroot dir).
+# --disable-ssl: this build HAS transparent-SSL support (the deb depends on
+# libssl3t64; it auto-detects a TLS ClientHello on the same port) — pin the
+# port to plain HTTP only: no on-the-fly TLS (D6 keeps TLS, if ever needed,
+# at a real reverse proxy in front). No --localhost-only: 0.0.0.0:4200 is
+# the browser-reachable edge (trusted-LAN posture, D6); Apache fronts it at
+# /shell/, the PAM login form is the first thing a visitor sees.
+# --css FILE: the managed dark theme (SHELLINABOX_CSS_DST, written in
+# converge §(d2b) before this unit can restart). The css shipped inside the
+# binary is light; --css=FILE appends the file after it, so at equal
+# specificity the theme wins. Fixed posture — not --user-css (that is a
+# per-session option menu, not a deploy-time theme).
+ExecStart=/usr/bin/shellinaboxd -q --background=/run/shellinabox/shellinaboxd.pid -c /var/lib/shellinabox --port ${DESIRED_SHELLINABOX_PORT} --disable-ssl --css $SHELLINABOX_CSS_DST
+PIDFile=/run/shellinabox/shellinaboxd.pid
+Restart=always
+RestartSec=1
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+      ;;
     lcd)
       cat <<EOF
 [Unit]
@@ -870,7 +951,7 @@ apache_desired_sig() {
   local am
   {
     cat "$APACHE_CONF_DST" 2>/dev/null || true
-    for am in proxy proxy_http; do
+    for am in proxy proxy_http proxy_wstunnel; do
       if [[ -f "/etc/apache2/mods-enabled/$am.load" ]]; then
         printf 'mod:%s\n' "$am"
       fi
@@ -879,6 +960,38 @@ apache_desired_sig() {
       printf 'conf:cyberdeck\n'
     fi
   } | sha256sum | awk '{print $1}'
+}
+
+is_in_unit_tree() {
+  # Is this pid our gamepi-shellinabox daemon (MainPID) or one of its
+  # descendants? shellinaboxd's `-q --background=` forks a parent+child pair
+  # (the child holds the socket after the parent re-execs), so exempting
+  # MainPID alone false-positives the child (observed 2026-09-20: a no-churn
+  # plan carried a permanent `drift vendor-init shellinabox` for the daemon's
+  # own child). Walk ancestors to MainPID; bound = init (1).
+  local pid="$1" ppid depth=0
+  while [[ -n "$pid" && "$pid" != "0" && "$pid" != "1" && "${depth:-0}" -lt 12 ]]; do
+    [[ "$pid" == "$2" ]] && return 0
+    ppid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+    pid="$ppid"
+    depth=$(( depth + 1 ))
+  done
+  return 1
+}
+
+sysv_shellinabox() {
+  # Whether the shellinabox deb's vendor sysvinit path still needs takeover:
+  # rc S-start links present, or any shellinaboxd outside this unit's process
+  # tree. (The conffile compare lives in §(d3) via write_if_changed.)
+  local l pid mainpid
+  for l in /etc/rc[0-9].d/S0[0-9]shellinabox; do
+    [[ -e "$l" ]] && return 0
+  done
+  mainpid="$(systemctl show -P MainPID --value gamepi-shellinabox.service 2>/dev/null || true)"
+  for pid in $(pgrep -f 'bin/shellinaboxd' 2>/dev/null || true); do
+    is_in_unit_tree "$pid" "$mainpid" || return 0
+  done
+  return 1
 }
 
 # web_api_plan_audit: the plan-mode twin of api/go/install.sh — records the
@@ -983,9 +1096,14 @@ converge() {
   local pkg curdef curhost vncfile
   # golang-go + apache2: the web UI + metrics API toolchain + web server
   # (converge §(h); docs/setup.md "Web UI + metrics API").
+  # websockify + shellinabox: the browser bridges (converge §(f);
+  # docs/setup.md "Browser access"). websockify is the WS proxy for the
+  # vendored noVNC client (api/www/vnc/); the novnc package ITSELF is
+  # deliberately NOT installed — it drags ~106 MB of nodejs + net-tools
+  # whose only use here is serving the client, and the client is vendored.
   local -a PKGS=( x11vnc xvfb xterm openbox dbus-x11 x11-utils fonts-dejavu-core \
                   python3-xlib python3-libgpiod python3-spidev python3-pil python3-numpy \
-                  golang-go apache2 )
+                  golang-go apache2 websockify shellinabox )
   local -a missing=()
 
   # (a) default target: multi-user (no console getty; headless)
@@ -1076,10 +1194,79 @@ converge() {
     fi
   fi
 
+  # (d2) ShellInABox PAM file (plan 2026-09-20-10-47-32, D2) — the deb
+  #      ships none (hard-coded pam_start("shellinabox")); without it
+  #      every session fails auth. common-* includes = exactly the
+  #      PAM stack sshd uses, plus the pam_env session line D2 asks
+  #      for.
+  write_if_changed /etc/pam.d/shellinabox 644 root 'auth     include common-auth
+account  include common-account
+password include common-password
+session  required pam_env.so
+session  include common-session'
+
+  # (d2b) ShellInABox dark theme (plan 2026-09-20-10-47-32 follow-up, user ask
+  #       2026-09-20). shellinaboxd --css=FILE appends the file's CSS to the
+  #       client's stylesheet; the palette matches the dashboard (api/www/
+  #       style.css). Lands at root:root 644 OUTSIDE the unit's -c directory
+  #       (/var/lib/shellinabox), so the binary ships no copy of it to upgrade
+  #       over — apt never touches /usr/local. A rewritten unit (ExecStart
+  #       changed) restarts through the existing CHANGED_FILES gate §(g), so no
+  #       dedicated restart logic here. (The alternative --user-css= flags make
+  #       the theme a per-session user option with a dropdown in the menu; this
+  #       is a fixed posture, so --css.)
+  if [[ -f "$SHELLINABOX_CSS_SRC" ]]; then
+    write_if_changed "$SHELLINABOX_CSS_DST" 644 root "$(cat "$SHELLINABOX_CSS_SRC")"
+  else
+    if (( PLAN_MODE == 1 )); then
+      add_item "shellinabox-css-src" "DRIFT" "missing $SHELLINABOX_CSS_SRC (run from the repo root)"
+    else
+      log "RESULT: INCOMPLETE:web-src — missing $SHELLINABOX_CSS_SRC"
+      exit 1
+    fi
+  fi
+
+  # (d3) ShellInABox vendor-init TAKEOVER (plan 2026-09-20-10-47-32) — the deb
+  #      ships a sysvinit script (enabled at install: S01shellinabox rc links,
+  #      SHELLINABOX_DAEMON_START=1 by default) that starts a SECOND daemon on
+  #      4200 at boot; with our unit also requesting it, whoever loses the
+  #      race bounces 'Failed to find any available port!' (seen first live on
+  #      2026-09-20: our unit failed five restarts while the vendor's stray
+  #      held the port). Keep the init script on disk, but make it a no-op and
+  #      strip the start links so gamepi-shellinabox is the ONLY manager of
+  #      :4200. The Debian CSS-options var from the package conffile is not
+  #      reproduced: theming is a fixed --css (a managed dark theme, §(d2b)),
+  #      no per-session options, so the var would only survive the next
+  #      package upgrade as noise.
+  write_if_changed /etc/default/shellinabox 644 root 'SHELLINABOX_DATADIR="/var/lib/shellinabox"
+SHELLINABOX_PORT=4200
+SHELLINABOX_USER="shellinabox"
+SHELLINABOX_GROUP="shellinabox"
+# 0: setup.sh owns gamepi-shellinabox.service (setup.sh §(d3)) — the vendor
+# /etc/init.d/shellinabox script must start no daemon of its own, else the
+# two fight for port 4200 at boot.
+SHELLINABOX_DAEMON_START=0
+SHELLINABOX_ARGS="--no-beep"'
+  # Conffile drift = "vendor init still configured" — covered by the
+  # write_if_changed above. The rest of the takeover (rc links, stray
+  # daemon, failed counter) is state, not bytes:
+  if sysv_shellinabox; then
+    if (( PLAN_MODE == 0 )); then
+      /usr/sbin/update-rc.d shellinabox disable
+      /etc/init.d/shellinabox stop
+      rm -f /var/run/shellinaboxd.pid
+      systemctl reset-failed gamepi-shellinabox.service 2>/dev/null || true
+      log "applied    vendor-init takeover (rc links disabled, stray daemon stopped, fail counter reset)"
+    else
+      log "drift      vendor-init shellinabox"
+      add_item "shellinabox-sysv" "DRIFT" "vendor sysvinit start links present and/or the vendor shellinaboxd is running (apply: update-rc.d disable + stop + reset-failed gamepi-shellinabox)"
+    fi
+  fi
+
   # (e) overlay (§5)
   apply_overlay
 
-  # (f) artifacts (§6): bridge, sound binary, RT drop-in, five units, autostart
+  # (f) artifacts (§6): bridge, sound binary, RT drop-in, seven units, autostart
   local bridge_content unit target content autostart autostart_content
   bridge_content="$(generate_bridge)"
   write_if_changed "$BRIDGE_PY" 755 root "$bridge_content"
@@ -1090,7 +1277,7 @@ converge() {
   # be -1 already; the file is what makes that survive.
   write_if_changed "$SYSCTL_RT_DROPIN" 644 root 'kernel.sched_rt_runtime_us = -1'
 
-  for unit in xvfb openbox vnc lcd sound; do
+  for unit in xvfb openbox vnc lcd sound websockify shellinabox; do
     target="/etc/systemd/system/gamepi-${unit}.service"
     content="$(generate_unit "$unit")"
     write_if_changed "$target" 644 root "$content"
@@ -1124,7 +1311,7 @@ converge() {
         touch_units=1
       fi
     done
-    for u in xvfb openbox vnc lcd sound; do
+    for u in xvfb openbox vnc lcd sound websockify shellinabox; do
       if [[ "$(systemctl is-active "gamepi-$u.service" 2>/dev/null || true)" != "active" ]]; then
         touch_units=1
       fi
@@ -1132,7 +1319,7 @@ converge() {
     if (( touch_units == 1 )); then
       log "systemd: daemon-reload + restart changed / start inactive managed units"
       systemctl daemon-reload
-      for u in xvfb openbox vnc lcd sound; do
+      for u in xvfb openbox vnc lcd sound websockify shellinabox; do
         svc="gamepi-$u.service"
         if [[ -n "${unit_written[$svc]:-}" ]]; then
           log "systemd: restarting $svc (unit file written this run)"
@@ -1180,10 +1367,15 @@ converge() {
     fi
   fi
 
-  # proxy modules (the conf is <IfModule>-guarded, but /api/ proxying needs
-  # them for real) + the conf-enabled symlink. Both idempotent.
+  # proxy modules (the conf is <IfModule>-guarded, but /api/ proxying +
+  # the /vnc/websockify WS upgrade need these for real) + the conf-enabled
+  # symlink. Both idempotent.
   local m
-  for m in proxy proxy_http; do
+  # The module is mod_proxy_wstunnel, but its a2enmod NAME is proxy_wstunnel
+  # (mods-available/proxy_wstunnel.load — Apache 2.4.68 ships no wstunnel.load;
+  # `a2enmod wstunnel` dies with 'Module wstunnel does not exist!', the first
+  # live apply of 2026-09-20 proved it). Keep name and .so distinct.
+  for m in proxy proxy_http proxy_wstunnel; do
     if [[ ! -f "/etc/apache2/mods-enabled/$m.load" ]]; then
       if (( PLAN_MODE == 1 )); then
         add_item "apache-mod:$m" "DRIFT" "not enabled (apply: a2enmod $m)"
@@ -1288,6 +1480,7 @@ converge() {
 # a fresh board) report SKIPPED — not FAIL — so the reboot prompt can fire.
 run_verify() {
   local xd u hz uv ov st ts ep jview alc ncards rtv stale_found i2cdev
+  local ws_bind ws_all ws_hs siab_bind siab_ok siab_body vncp bnd i
 
   if xd="$(DISPLAY=:1 /usr/bin/xdpyinfo 2>/dev/null)"; then
     if printf '%s\n' "$xd" | grep -Eq 'dimensions:[[:space:]]+960x960' \
@@ -1300,7 +1493,7 @@ run_verify() {
     add_item "xvfb-screen" "FAIL" "xdpyinfo :1 unreachable"
   fi
 
-  for u in xvfb openbox vnc lcd sound; do
+  for u in xvfb openbox vnc lcd sound websockify shellinabox; do
     st="$(systemctl is-active "gamepi-$u.service" 2>/dev/null || true)"
     if [[ "$st" == "active" ]]; then
       add_item "unit:$u" "PASS"
@@ -1471,7 +1664,82 @@ run_verify() {
     add_item "api-static" "FAIL" "localhost/ is not the deck dashboard: $page"
   fi
 
-  local i
+  if grep -q 'href="/vnc/vnc.html"' <<<"$web" && grep -q 'href="/shell/"' \
+     <<<"$web"; then
+    add_item "access-links" "PASS" "dashboard Access card carries both routes (/vnc/vnc.html, /shell/)"
+  else
+    add_item "access-links" "FAIL" "dashboard is missing the Access card routes /vnc/vnc.html and /shell/ (the www source api/www/index.html deploys both)"
+  fi
+
+  # Browser bridges (plan 2026-09-20-10-47-32; docs/setup.md "Browser
+  # access"). As with rows 14-17 pre-web-API, a --plan run before the
+  # first apply legitimately FAILs these. The 0.0.0.0 / [::] / bare-*
+  # binds are the trusted-LAN posture (decision D6): a loopback-only bind is
+  # drift.
+  ws_bind="$(ss -lnt 2>/dev/null | awk -v p=":${DESIRED_WEBSOCKIFY_PORT}" '$4 ~ p"$" {print $4}' || true)"
+  ws_all=0
+  for bnd in $ws_bind; do
+    case "$bnd" in 0.0.0.0:*|\[::\]:*|\*:*) ws_all=1 ;; esac
+  done
+  if (( ws_all == 1 )); then
+    # Same handshake the noVNC client performs; the shipped websockify
+    # answers a proper upgrade GET with "HTTP/1.1 101 Switching Protocols"
+    # (a plain GET gets 405 — so only a real WS client passes this).
+    ws_hs="$(timeout 3 bash -c '
+      exec 3<>/dev/tcp/127.0.0.1/'"${DESIRED_WEBSOCKIFY_PORT}"' || exit
+      printf "GET / HTTP/1.1\r\nHost: t\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n" >&3
+      IFS= read -r -t 2 -u 3 line || exit
+      printf "%s" "$line"
+    ' 2>/dev/null || true)"
+  fi
+  if (( ws_all == 1 )) && [[ "$ws_hs" == *"101 Switching Protocols"* ]]; then
+    add_item "websockify" "PASS" "bind ${ws_bind}; loopback WS handshake answered '101 Switching Protocols'"
+  else
+    add_item "websockify" "FAIL" "bind='${ws_bind:-none}' all-iface=$ws_all handshake='${ws_hs:-no-dial}' (want a 0.0.0.0/[::]/* bind on ${DESIRED_WEBSOCKIFY_PORT} + a 101)"
+  fi
+
+  siab_bind="$(ss -lnt 2>/dev/null | awk -v p=":${DESIRED_SHELLINABOX_PORT}" '$4 ~ p"$" {print $4}' || true)"
+  siab_ok=0
+  for bnd in $siab_bind; do
+    case "$bnd" in 0.0.0.0:*|\[::\]:*|\*:*) siab_ok=1 ;; esac
+  done
+  siab_body="$(curl -sf --max-time 5 http://localhost/shell/ 2>/dev/null || true)"
+  if (( siab_ok == 1 )) && grep -q 'Shell In A Box' <<<"$siab_body"; then
+    add_item "shellinabox" "PASS" "bind ${siab_bind}; /shell/ serves the PAM login page"
+  else
+    add_item "shellinabox" "FAIL" "bind='${siab_bind:-none}' all-iface=$siab_ok page='${siab_body:0:60}' (want a 0.0.0.0/[::]/* bind on ${DESIRED_SHELLINABOX_PORT} + the ShellInABox login page at /shell/)"
+  fi
+
+  if [[ -s /etc/pam.d/shellinabox && "$(stat -c '%A %U' /etc/pam.d/shellinabox 2>/dev/null)" == "-rw-r--r-- root" ]]; then
+    add_item "shellinabox-pam" "PASS" "managed PAM stack present (-rw-r--r-- root)"
+  else
+    add_item "shellinabox-pam" "FAIL" "/etc/pam.d/shellinabox absent, empty, or not 644 root (without it every session fails PAM auth)"
+  fi
+
+  # Row 24: the managed dark theme — file present AND its signature (the deck
+  # bg #0b0e14, which appears nowhere in the shipped light css) actually
+  # reaches the browser. --css=FILE is appended to the SERVED stylesheet, so
+  # the probe is the /shell/styles.css URL (through Apache), not the page.
+  siab_css="$(curl -sf --max-time 5 http://localhost/shell/styles.css 2>/dev/null || true)"
+  if [[ -s "$SHELLINABOX_CSS_DST" ]] && grep -q '0b0e14' <<<"$siab_css"; then
+    add_item "shellinabox-theme" "PASS" "dark theme at $SHELLINABOX_CSS_DST + served into /shell/styles.css (deck bg present)"
+  else
+    add_item "shellinabox-theme" "FAIL" "dark theme missing: $SHELLINABOX_CSS_DST absent/empty or its signature not in the served /shell/styles.css (unit must carry --css $SHELLINABOX_CSS_DST; restart gamepi-shellinabox)"
+  fi
+
+  if [[ -f /etc/apache2/mods-enabled/proxy_wstunnel.load ]] && grep -q "ws://127.0.0.1:${DESIRED_WEBSOCKIFY_PORT}" "$APACHE_CONF_DST" 2>/dev/null; then
+    add_item "apache-ws" "PASS" "proxy_wstunnel enabled + the ws:// rule in the managed conf"
+  else
+    add_item "apache-ws" "FAIL" "mods-enabled/proxy_wstunnel.load or the ws://127.0.0.1:${DESIRED_WEBSOCKIFY_PORT} rule missing (apply: a2enmod proxy_wstunnel + deploy $APACHE_CONF_SRC)"
+  fi
+
+  vncp="$(curl -sf --max-time 5 http://localhost/vnc/vnc.html 2>/dev/null || true)"
+  if grep -q '<title>noVNC</title>' <<<"$vncp"; then
+    add_item "novnc-client" "PASS" "localhost/vnc/vnc.html serves the vendored noVNC page (WS -> /vnc/websockify)"
+  else
+    add_item "novnc-client" "FAIL" "localhost/vnc/vnc.html missing or not the noVNC page (api/www/vnc/ deploy)"
+  fi
+
   for i in "${!ITEMS_STATE[@]}"; do
     if [[ "${ITEMS_STATE[$i]}" == "FAIL" ]]; then
       VERIFY_FAILS=$(( VERIFY_FAILS + 1 ))

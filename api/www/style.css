@@ -126,6 +126,32 @@ footer {
 }
 footer .marker { opacity: 0.5; }
 
+/* Browser access card (plan 2026-09-20-10-47-32): static links into the
+   managed Apache routes /vnc/ and /shell/ — no JS, nothing to poll. */
+.access-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.access-links a {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--dim);
+}
+.access-links a:hover {
+  color: var(--ok);
+  border-bottom-color: var(--ok);
+}
+.access-sub {
+  display: block;
+  color: var(--dim);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
 @media (max-width: 900px) {
   main { grid-template-columns: 1fr; }
   .card.wide { grid-column: auto; }
