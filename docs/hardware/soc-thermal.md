@@ -31,9 +31,10 @@ standard `thermal_zone*` / `cooling_device*` kernel interface. These are
   typical desktop SoC offers.
 - **10 cooling devices** exist under `/sys/devices/virtual/thermal/`,
   including the SoC's own frequency-cap trip points and **one entry that is
-  the `pwmfan` hwmon** (see [fan.md](fan.md)) — i.e. the kernel's thermal
-  framework already has a fan-shaped cooling device in its model, it's just
-  at 0% with no policy driving it (that's the whole [fan.md](fan.md) story).
+  the `pwmfan` cooling device** (see [fan.md](fan.md)) — the kernel's thermal
+  framework already models the deck's fan and drives it via its internal
+  governor through a 5-state duty ladder (states 0–4, state 0 a hard-off);
+  the full fan story, and the 5 V vs 12 V power fix, is in [fan.md](fan.md).
 - `skin` at ~34 °C while the CPU big core reads ~50 °C is the direct,
   OS-visible evidence of the **case/thermal problem** in the README's Known
   Unresolved section (heat is generated on-die faster than the case + tiny

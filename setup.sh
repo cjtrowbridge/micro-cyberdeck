@@ -75,6 +75,16 @@ DESIRED_BOARD_MODEL="orange pi zero 3w"   # /proc/device-tree/model (lowercased)
 DESIRED_BOARD_ID="orangepizero3w"         # BOARD= in /etc/armbian-release
 DESIRED_OVERLAY_CORE="spi3-cs0-cs1-spidev"
 DESIRED_VNC_PORT=5900
+# Local inference (docs/hardware/npu.md — Ollama runs CPU-only on this SoC).
+# The models the deck's pipelines are expected to be able to point at.
+# setup.sh does not manage the service's install (current deployment: a
+# Docker container `ollama` — see resolve_ollama_cmd); it only verifies the
+# local API is up and pulls these models when absent.
+OLLAMA_HOST_URL="http://localhost:11434"
+# Tag convention: ONE colon separates name from tag (qwen3.5:2b -> tag "2b");
+# a second colon is a 400 Bad Request from the registry, so the Q8_0 variant
+# is name:tag `qwen3.5:2b-q8_0`, not `qwen3.5:2b:q8_0`.
+OLLAMA_MODELS=( qwen3.5:2b qwen3.5:2b-q8_0 )
 BRIDGE_PY="/usr/local/bin/xvfb-to-st7789.py"
 SOUND_BIN="/usr/local/bin/hat-sound"      # built from SOUND_SRC (repo)
 SOUND_SRC="tools/hat-sound.c"              # repo-relative to the caller's CWD
@@ -217,6 +227,10 @@ preflight() {
   # sudo preserves) + build toolchain.
   if [[ ! -f "$SOUND_SRC" ]]; then errs+=("missing_sound_src:${SOUND_SRC}(run_from_repo_root)"); fi
   command -v gcc >/dev/null 2>&1 || errs+=("missing_gcc")
+
+  # Ollama model management (§3g / verify row 13) shells out through curl + jq.
+  command -v curl >/dev/null 2>&1 || errs+=("missing_curl")
+  command -v jq   >/dev/null 2>&1 || errs+=("missing_jq")
 
   if (( ${#errs[@]} > 0 )); then
     local r
@@ -762,10 +776,16 @@ generate_autostart() {
   cat <<'EOF'
 xsetroot -solid '#305080' &
 
+# Terminal is sized to the 960x960 :1 canvas. The Xvfb reports 100 DPI,
+# so xterm -fs <points> turns into ~1.33 px/pt per cell. fs 13 (DejaVu)
+# -> 11x22 px cells -> 888x908 px outer window, centered with ~38 px
+# margin. fs 18 (the original 960 value) -> ~24 px cells -> a 1206x1019
+# window that overflows the canvas; do not raise the font without also
+# cutting columns/rows to stay <= 952x952 px.
 xterm \
     -fa "DejaVu Sans Mono" \
-    -fs 18 \
-    -geometry 80x33+8+8 \
+    -fs 13 \
+    -geometry 80x33+38+8 \
     -title "Orange Pi Zero 3W" &
 EOF
 }
@@ -812,6 +832,73 @@ build_sound() {
   return 0
 }
 
+# ── Ollama local models (docs/setup.md: Managed scope, docs/hardware/npu.md) ─
+# The Ollama binary installs with the vendor image; setup.sh manages its model
+# library: verify row 13 proves the local API is up and the desired models are
+# present, §3g pulls any that are absent. OLLAMA_HOST is not honored (the deck's
+# service is expected on localhost:11434; an override is drift the verify names).
+ollama_api_ok() {
+  curl -sf --max-time 3 "$OLLAMA_HOST_URL/api/version" 2>/dev/null >/dev/null
+}
+# Prints the names Ollama currently serves (empty when the service cannot be
+# reached or the response is not the expected JSON).
+ollama_model_names() {
+  local out
+  if out="$(curl -sf --max-time 3 "$OLLAMA_HOST_URL/api/tags" 2>/dev/null | jq -r '.models[].name' 2>/dev/null)"; then
+    [[ -n "$out" ]] && printf '%s\n' "$out"
+  fi
+  return 0
+}
+ollama_missing_models() {
+  local m n found
+  local -a names=()
+  names=( $(ollama_model_names || true) )
+  for m in "${OLLAMA_MODELS[@]}"; do
+    found=0
+    for n in "${names[@]:-}"; do
+      if [[ "$n" == "$m" ]]; then found=1; break; fi
+    done
+    if (( found == 0 )); then printf '%s\n' "$m"; fi
+  done
+  return 0
+}
+# A pull can run through a host `ollama` CLI or through a container: the
+# current board's deployment IS a Docker container (name `ollama`, 11434
+# published; model volume /var/lib/docker/volumes/ollama/_data <->
+# /root/.ollama inside the container; the HOST has no ollama binary at all —
+# that is the resolved "/bin/ollama identity anomaly", docs/hardware/npu.md).
+# resolve_ollama_cmd tries the host CLI first, then the Docker fallback;
+# ollama_pull uses whichever was resolved.
+OLLAMA_PULL_KIND=""
+OLLAMA_BIN=""
+resolve_ollama_cmd() {
+  local c
+  for c in $(command -v ollama 2>/dev/null || true) /usr/bin/ollama /usr/local/bin/ollama /bin/ollama; do
+    if [[ -n "$c" && -x "$c" ]]; then OLLAMA_PULL_KIND="host"; OLLAMA_BIN="$c"; return 0; fi
+  done
+  if command -v docker >/dev/null 2>&1 \
+     && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ollama'; then
+    OLLAMA_PULL_KIND="docker"
+    return 0
+  fi
+  return 1
+}
+# Bounded pull: Ollama's progress output is swallowed; the exit status
+# carries the result (0 = the model is now in the local library).
+ollama_pull() {
+  local rc=0 out=""
+  case "$OLLAMA_PULL_KIND" in
+    host)   out="$("$OLLAMA_BIN" pull "$1" 2>&1)" || rc=$? ;;
+    docker) out="$(docker exec ollama ollama pull "$1" 2>&1)" || rc=$? ;;
+    *)      return 1 ;;
+  esac
+  if (( rc != 0 )); then
+    log "ollama pull error: $(tail -n 3 <<<"$out" | tr '\n' ' ')"
+    return 1
+  fi
+  return 0
+}
+
 # ── §3: converge ───────────────────────────────────────────────────────────
 converge() {
   local pkg curdef curhost vncfile
@@ -852,6 +939,36 @@ converge() {
     else
       log "hostname $curhost -> $HOSTNAME_DESIRED"
       hostnamectl set-hostname "$HOSTNAME_DESIRED"
+    fi
+  fi
+
+  # (g) ollama models: verify-or-pull. setup.sh does not manage the service
+  # install (current deployment: Docker container `ollama`), so an
+  # unreachable API is verify drift/failure, not something this step can
+  # repair. Plan mode only reports.
+  local m missing_models
+  if ollama_api_ok; then
+    missing_models="$(ollama_missing_models)"
+    if (( PLAN_MODE == 1 )); then
+      if [[ -n "$missing_models" ]]; then
+        add_item "ollama-models" "DRIFT" "absent from the local library (apply pulls): $(printf '%s' "$missing_models" | tr '\n' ' ')"
+      fi
+    else
+      if [[ -n "$missing_models" ]]; then
+        if resolve_ollama_cmd; then
+          while IFS= read -r m; do
+            [[ -n "$m" ]] || continue
+            log "pulling $m via $OLLAMA_PULL_KIND (this can take a while)"
+            if ollama_pull "$m"; then
+              log "pulled   $m"
+            else
+              log "pull failed: $m (verify row 13 reports it)"
+            fi
+          done <<< "$missing_models"
+        else
+          add_item "ollama-pull-path" "DRIFT" "no way to pull models: no host ollama CLI and no running 'ollama' docker container (fix the deployment, re-run)"
+        fi
+      fi
     fi
   fi
 
@@ -1088,6 +1205,23 @@ run_verify() {
 
   if hz="$(cat /sys/class/spi-master/spi3/max_speed_hz 2>/dev/null)"; then
     log "info: spi3 max_speed_hz=$hz (informational, not gating)"
+  fi
+
+  # Ollama local inference: API reachability, then the desired model set.
+  # Apply mode pulls absent models in §3g before this row runs; plan mode
+  # reports the gap as drift instead.
+  local m missing_models
+  if ollama_api_ok; then
+    missing_models="$(ollama_missing_models)"
+    if [[ -z "$missing_models" ]]; then
+      add_item "ollama-models" "PASS" "$(IFS=' '; echo "${OLLAMA_MODELS[*]}") present via $OLLAMA_HOST_URL"
+    elif (( PLAN_MODE == 1 )); then
+      add_item "ollama-models" "FAIL" "absent (apply pulls): $(printf '%s' "$missing_models" | tr '\n' ' ')"
+    else
+      add_item "ollama-models" "FAIL" "pull did not land: $(printf '%s' "$missing_models" | tr '\n' ' ')"
+    fi
+  else
+    add_item "ollama-models" "FAIL" "$OLLAMA_HOST_URL unreachable (ollama service absent or down — setup.sh does not manage the service install)"
   fi
 
   local i

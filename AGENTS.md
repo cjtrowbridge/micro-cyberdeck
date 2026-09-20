@@ -44,6 +44,12 @@ never overwrites host-owned content during bootstrap or updates.
   the same change. The kernel boot log (`dmesg`/`/var/log/kern.log`) and
   `i2c-dev` nodes are root-only on this board — cite them as operator-level
   evidence, and never brute-force register writes against the live PMIC.
+- `third_party/` — pinned external work as submodules:
+  `third_party/a733_npu_driver` (github.com/petayyyy/a733_npu_driver) — the
+  A733 NPU (Vivante VIP9000) LLM/VLM prior: verified configs, blocker list,
+  toolchain, and board bring-up for this exact SoC/board. The evidence base
+  for [docs/hardware/npu.md](docs/hardware/npu.md); read its
+  `docs/import_chat.md` first.
 - `api.sample.yaml` — tracked local-inference template. Copy it to the ignored
   `api.yaml` and supply local values; never commit `api.yaml`.
 - `pipeline.yaml` / `prompts/` — host pipeline definition and customized runtime

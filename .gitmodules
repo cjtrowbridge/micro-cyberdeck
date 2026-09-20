@@ -1,3 +1,6 @@
 [submodule "agentic-pipelines"]
 	path = agentic-pipelines
 	url = https://github.com/cjtrowbridge/agentic-pipelines
+[submodule "third_party/a733_npu_driver"]
+	path = third_party/a733_npu_driver
+	url = https://github.com/petayyyy/a733_npu_driver/

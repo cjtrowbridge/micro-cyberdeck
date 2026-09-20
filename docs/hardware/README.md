@@ -62,7 +62,7 @@ these views, so no part number has been assigned.
 | Fan | [fan.md](fan.md) | Partial |
 | RTC (hym8563) | [rtc-hym8563.md](rtc-hym8563.md) | Not started |
 | USB-C power negotiation (fusb302/TCPM) | [usbc-power.md](usbc-power.md) | Automatic |
-| NPU (3 TOPS INT8) | [npu.md](npu.md) | Not started |
+| NPU (3 TOPS INT8) | [npu.md](npu.md) | In progress — VIPLite runtime installed, G1 green 2026-09-19; ACUITY (ONNX→NBG) still to procure |
 | HDMI audio card | [hdmi-audio.md](hdmi-audio.md) | Unused (by design) |
 
 **Expansion ideas** (the other table in the README) have no records yet — they
