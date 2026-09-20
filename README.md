@@ -145,9 +145,10 @@ sudo bash setup.sh
 - VS Code: the **GamePi: set up the machine** task / play action
   (`.vscode/`) runs the same command in an integrated terminal, so the sudo
   prompt and the one reboot question stay visible and answerable.
-- If the board is stuck in one of the two known broken 480-mode states, the
-  one-time rescue scripts `apply-960.sh` / `revert-480.sh` cover it; anything
-  else is a fresh flash + `setup.sh`.
+- The display is a single 960x960 `:1` desktop by design (the ST7789 panel
+  is 4:1 down-scaled from it; VNC serves the 960 view on 5900). The one-time
+  480->960 migration is complete and its rescue scripts retired (2026-09-19);
+  a stuck display is a fresh-flash + `setup.sh` case like any other.
 
 ### More Resources
 

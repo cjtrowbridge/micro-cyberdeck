@@ -1,9 +1,10 @@
 # micro-cyberdeck — Host Agent Instructions
 
 This host owns the Orange Pi Zero 3W GamePi device: the fresh-flash bring-up
-script (`setup.sh`), the 960x960 single-screen migration (`apply-960.sh` /
-`revert-480.sh`), the bring-up log (`docs/xfce-freeze-diagnosis.md`), and the
-host pipeline scaffold described below.
+script (`setup.sh`), the 960x960 single-screen display (the one-time 480->960
+migration is complete; its rescue scripts were retired 2026-09-19), the
+bring-up log (`docs/xfce-freeze-diagnosis.md`), and the host pipeline
+scaffold described below.
 
 ## Agentic Pipelines (framework submodule)
 

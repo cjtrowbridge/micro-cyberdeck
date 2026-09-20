@@ -27,10 +27,15 @@ display — it is driven entirely in userspace: a 960×960 off-screen X11 root
 - **Verify proof (live line):** `setup.sh` §4 verify greps the journal *since
   the current unit start* for `X11 root: 960x960` (verify item `bridge-live`;
   with a grace-wait retry path — see `docs/setup.md` for the buffering caveat).
-- **Resolution migration history:** `apply-960.sh` / `revert-480.sh` at the
-  repo root migrate the desktop between 960 and 480; pre-migration bridge
-  backups survive on disk (`/usr/local/bin/xvfb-to-st7789.py.before-960`,
-  `.before-rotation`, `.before-software-rotation`).
+- **Resolution is 960-owned now:** the desktop is a single 960x960 `:1` by
+  design; `setup.sh` templates it (DESIRED_WIDTH/HEIGHT, the `:1` unit set,
+  `SOURCE_W/H = 960` bridge) and the verify matrix proves it
+  (`xvfb-screen`, `bridge-live`). The one-time 480->960 migration
+  (2026-09-13, then `apply-960.sh` / `revert-480.sh` at the repo root)
+  held on the live board through 2026-09-19, so both scripts were retired
+  from the repo. The legacy `:2` 1280x720 units remain disabled and orphaned
+  on the board (harmless; not a setup.sh concern); the `*.before-960` backups
+  of the 480 config survive on disk.
 - **Provenance:** the custom minimal X stack (Xvfb + bridge, no full DE) exists
   because Armbian ships only CLI images for this board, and stock
   XFCE/LightDM install wedged the kernel on the A733 display driver — the full
@@ -46,8 +51,9 @@ display — it is driven entirely in userspace: a 960×960 off-screen X11 root
   states and the overlay env lines are the observable surface:
   `systemctl is-active gamepi-xvfb gamepi-lcd`,
   `cat /boot/armbian-environment | grep -i overlay`.
-- The `apply-960.sh` / `revert-480.sh` scripts document every step of the
-  migration in their own headers.
+- The one-time 480->960 migration session is recorded in
+  [`xfce-freeze-diagnosis.md`](../xfce-freeze-diagnosis.md) (2026-09-13); the
+  scripts that performed it are gone from the repo (retired 2026-09-19).
 
 ## What it portends
 
@@ -55,8 +61,9 @@ display — it is driven entirely in userspace: a 960×960 off-screen X11 root
   down-scaler. The per-frame PIL/ImageMagick pass is a real CPU cost on an 8-core
   CPU that may simultaneously be running local inference — keep that in mind
   when scheduling heavy work against the display.
-- 960 is a **soft** limit: the rescue scripts prove the resolution swap is
-  scripted and reversible, so the desktop can be re-tuned without a reflash.
+- 960 is a **soft** limit: it lives in `setup.sh`'s `DESIRED_WIDTH/HEIGHT`
+  (script header) and the unit/bridge templates, so the desktop can be
+  re-tuned by editing the templates and re-running `setup.sh` — no reflash.
 - The screen is **display-only today** — the touch controller on the same HAT
   is unbound (see [touch-gt9271.md](touch-gt9271.md)); when it lands, its
   input coordinates will need to map to the 960×960 root, not the panel.

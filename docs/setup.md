@@ -339,9 +339,10 @@ payload. Agents never reboot on their own except via `--reboot`.
 
 The first step for a "broken board" is to re-run setup (or re-run it under
 `--plan` to see the diagnosis). The verify matrix is the diagnostic: each FAIL
-names its file / unit. If the board won't boot, the rescue scripts in this
-repo — `apply-960.sh` / `revert-480.sh` (one-time migration helpers) — cover the
-two known broken states; anything else is a fresh-flash + `setup.sh` case.
+names its file / unit. There are no rescue scripts: the display is a single
+960x960 `:1` desktop by design (the one-time 480->960 migration is complete
+and its scripts were retired 2026-09-19), so a stuck display is a
+fresh-flash + `setup.sh` case like any other.
 
 ## How to extend this file (and setup.sh)
 
