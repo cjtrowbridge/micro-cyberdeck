@@ -36,7 +36,7 @@ README row was wrong.)
   DTB, not sysfs): `cpub`, `cpul`, `cpul_idle`, `cpub_idle`, `gpu` (each
   with `trip-point@0/1` + `*_crit@0`), and `npu`, `ddr`, `skin`
   (crit-only). Evidence for the trip node names comes from the operator's
-  `dtc` dump log in `Diagnose XFCE Freeze.md` (L124–139). Most trips show
+  `dtc` dump log in `docs/xfce-freeze-diagnosis.md` (L124–139). Most trips show
   **no visible hysteresis** in that dump.
 - **The fan as installed is the wrong voltage.** It is a **12 V** part,
   but the SBC fan header is a **5 V-class rail** (the PMIC has no 12 V
@@ -116,7 +116,7 @@ over (duty should walk 0…255 with load).
   (2026-09-19):** as tabulated in "What we know" — hottest `cpub_idle`
   64.7 °C, `skin` 36.9 °C, no cpufreq crit throttle fired.
 - **Trip node names / no visible hysteresis:** operator's `dtc` dump log in
-  `Diagnose XFCE Freeze.md` (L124–139) — an operator-level citation (root
+  `docs/xfce-freeze-diagnosis.md` (L124–139) — an operator-level citation (root
   dump), not a new probe.
 - **The 12 V requirement:** the user's bench A/B — the fan does not behave
   on the port's 5 V-class supply ("the fan wants 12 V," 2026-09-19). The

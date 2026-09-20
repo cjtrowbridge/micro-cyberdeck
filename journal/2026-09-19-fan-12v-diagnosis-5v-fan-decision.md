@@ -17,7 +17,7 @@ the older `fan.md`/README described.
   internal thermal governor. **No user-space governor path exists on
   this kernel** — policy changes require a DTB overlay.
 - Trips live in the DTB only; per-zone trip node names from the operator's
-  `dtc` log (`Diagnose XFCE Freeze.md` L124–139); most trips show no
+  `dtc` log (`docs/xfce-freeze-diagnosis.md` L124–139); most trips show no
   visible hysteresis.
 - **Primary root cause (user's bench finding): the fan is a 12 V part on a
   5 V-class header rail** — "the fan wants 12 V." The PMIC has no 12 V

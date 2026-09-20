@@ -2,8 +2,8 @@
 
 This host owns the Orange Pi Zero 3W GamePi device: the fresh-flash bring-up
 script (`setup.sh`), the 960x960 single-screen migration (`apply-960.sh` /
-`revert-480.sh`), the bring-up log (`Diagnose XFCE Freeze.md`), and the host
-pipeline scaffold described below.
+`revert-480.sh`), the bring-up log (`docs/xfce-freeze-diagnosis.md`), and the
+host pipeline scaffold described below.
 
 ## Agentic Pipelines (framework submodule)
 

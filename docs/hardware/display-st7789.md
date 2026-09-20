@@ -34,7 +34,7 @@ display — it is driven entirely in userspace: a 960×960 off-screen X11 root
 - **Provenance:** the custom minimal X stack (Xvfb + bridge, no full DE) exists
   because Armbian ships only CLI images for this board, and stock
   XFCE/LightDM install wedged the kernel on the A733 display driver — the full
-  diagnosis is in [`Diagnose XFCE Freeze.md`](../../Diagnose%20XFCE%20Freeze.md).
+  diagnosis is in [`docs/xfce-freeze-diagnosis.md`](../xfce-freeze-diagnosis.md).
 
 ## How we know
 
