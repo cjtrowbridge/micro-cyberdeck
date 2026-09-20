@@ -2,4 +2,5 @@
 
 Format: `last_modified | path | title | summary`
 
+2026-09-20-09-35-18 | plans/past/2026-09-19-23-23-36_cyberdeck-webui-go-api.md | Cyberdeck web UI (static Apache dashboard) + Go API — bootstrap System tab | Add a Golang metrics API (thermal zones, RAM, / disk, fan, CPU, uptime) behind a systemd unit and a static Chart.js dashboard with a bootstrap "System" tab that polls every 5 s; layout is api/go (code + build/install pipeline) and api/www (static files setup.sh installs to /var/www/html once apache2 is confirmed); provisioned through setup.sh with a documented contract change and live apply->verify.
 2026-09-16-11-44-51 | plans/past/2026-09-15-10-01-56_hat-sound-setup-fold-in.md | Track hat-sound.c and fold real-audio into setup.sh | Make tools/hat-sound.c a tracked managed artifact, build+install it from source into /usr/local/bin, add a gamepi-sound.service, persist kernel.sched_rt_runtime_us=-1 via a sysctl.d drop-in, converge user_overlays to the full desired set, clean stale es8388/i2c overlays, and document every row in docs/setup.md in the same change; live apply->verify on the board before commit.

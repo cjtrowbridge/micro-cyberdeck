@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cyberdeck — system</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="host" id="deck-host">cyberdeck</span>
+    <span class="tab active">System</span>
+  </div>
+  <div class="chips">
+    <span class="chip" id="uptime-chip">up &mdash;</span>
+    <span class="chip" id="fresh-dot" title="API freshness (green &lt; 10 s, amber &lt; 30 s, red otherwise)">&bull; &mdash;</span>
+  </div>
+</header>
+
+<main>
+  <section class="card wide" id="temps-card">
+    <h2>Temperatures</h2>
+    <div class="zone-chips" id="zone-chips"></div>
+    <div class="chart-box"><canvas id="temp-chart"></canvas></div>
+  </section>
+
+  <section class="card" id="mem-card">
+    <h2>Memory</h2>
+    <div class="bar"><div class="bar-fill" id="mem-bar"></div><span class="bar-label" id="mem-label">&mdash;</span></div>
+    <pre class="kv" id="mem-kv"></pre>
+    <pre class="kv small" id="mem-swap"></pre>
+  </section>
+
+  <section class="card" id="disk-card">
+    <h2>Disk /</h2>
+    <div class="bar"><div class="bar-fill" id="disk-bar"></div><span class="bar-label" id="disk-label">&mdash;</span></div>
+    <pre class="kv" id="disk-kv"></pre>
+  </section>
+
+  <section class="card" id="fan-card">
+    <h2>Fan</h2>
+    <pre class="kv" id="fan-kv"></pre>
+  </section>
+</main>
+
+<footer>
+  deck system monitor &mdash; plan 2026-09-19-23-23-36 &mdash; polls /api every 5 s &mdash;
+  <span class="marker">cyberdeck-system-marker</span>
+</footer>
+
+<script src="vendor/chart.umd.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

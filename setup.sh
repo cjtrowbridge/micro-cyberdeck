@@ -11,8 +11,10 @@
 # What this does:
 #   Convergence-style provisioning for the Orange Pi Zero 3W GamePi deck
 #   (960x960 Xvfb desktop + Openbox + VNC :5900 + ST7789 240x240 SPI LCD
-#   bridge). One command, every run, in any state — fresh flash, partial
-#   state, or drifted:
+#   bridge + the web UI: a static Chart.js dashboard on Apache's default root
+#   /var/www/html, fed by the loopback-only cyberdeck-api Go metrics service,
+#   proxied at /api/ — docs/setup.md "Web UI + metrics API"). One command,
+#   every run, in any state — fresh flash, partial state, or drifted:
 #
 #     sudo bash setup.sh                 # interactive: prompts only when needed
 #     sudo bash setup.sh --plan          # read-only audit, never reboots
@@ -90,6 +92,20 @@ SOUND_BIN="/usr/local/bin/hat-sound"      # built from SOUND_SRC (repo)
 SOUND_SRC="tools/hat-sound.c"              # repo-relative to the caller's CWD
 SYSCTL_RT_DROPIN="/etc/sysctl.d/99-sched-rt.conf"   # board has no sysctl binary
 MARK_DIR="/var/lib/micro-cyberdeck"
+# Web UI + metrics API (plan 2026-09-19-23-23-36): the api/ tree provisions
+# the static dashboard (api/www/ -> /var/www/html/) + the loopback-only Go
+# metrics API /opt/cyberdeck/cyberdeck-api (built by api/go/install.sh, run
+# as cyberdeck-api.service); Apache proxies /api/ to it (cyberdeck.conf).
+API_GO="api/go"                                     # repo-relative (CWD)
+WEB_WWW="api/www"                                   # repo-relative; contents deploy to /var/www/html
+WEB_INSTALL="${API_GO}/install.sh"                  # the build/install pipeline
+WEB_UNIT_SRC="${API_GO}/systemd/cyberdeck-api.service"
+WEB_UNIT_DST="/etc/systemd/system/cyberdeck-api.service"
+WEB_BIN="/opt/cyberdeck/cyberdeck-api"
+WEB_ROOT="/var/www/html"
+APACHE_CONF_SRC="api/apache/cyberdeck.conf"         # repo-relative
+APACHE_CONF_DST="/etc/apache2/conf-available/cyberdeck.conf"
+APACHE_SIG="$MARK_DIR/apache.loaded-sig"            # sig of apache's last (re)load
 
 HOSTNAME_DESIRED="micro-cyberdeck"
 SPI_MHZ="48"
@@ -832,6 +848,69 @@ build_sound() {
   return 0
 }
 
+# ── Web UI + metrics API (api/ tree — plan 2026-09-19-23-23-36) ───────────
+# hash_api_src: content hash over api/go's sources — the SAME computation
+# api/go/install.sh writes to $MARK_DIR/cyberdeck-api.src-hash; the plan-mode
+# audit below compares against it without building (plan mode builds nothing
+# and touches no systemctl).
+hash_api_src() {
+  local list
+  list="$(cd "$API_GO" 2>/dev/null && find . -type f \
+                  \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -print0 \
+         | sort -z | xargs -0r sha256sum 2>/dev/null || true)"
+  printf '%s\n' "$list" | sha256sum | awk '{print $1}'
+}
+
+# apache_desired_sig: sig of apache's web state AS ON DISK right now:
+# the cyberdeck.conf content + which of the proxy mod enables and the
+# conf-enabled symlink are present. Stamped to $APACHE_SIG after every
+# reload, so "loaded state == on-disk state" converges the same way the api
+# binary does (marker philosophy) — see the reload gate in §(h).
+apache_desired_sig() {
+  local am
+  {
+    cat "$APACHE_CONF_DST" 2>/dev/null || true
+    for am in proxy proxy_http; do
+      if [[ -f "/etc/apache2/mods-enabled/$am.load" ]]; then
+        printf 'mod:%s\n' "$am"
+      fi
+    done
+    if [[ -f /etc/apache2/conf-enabled/cyberdeck.conf ]]; then
+      printf 'conf:cyberdeck\n'
+    fi
+  } | sha256sum | awk '{print $1}'
+}
+
+# web_api_plan_audit: the plan-mode twin of api/go/install.sh — records the
+# same converged decisions install.sh would take (hash-marker-rebuild-skip,
+# unit compare-install, enable), without building.
+web_api_plan_audit() {
+  local src_hash bin_hash marker
+  if [[ ! -f "$WEB_INSTALL" || ! -f "$WEB_UNIT_SRC" ]]; then
+    add_item "web-api-src" "DRIFT" "missing $WEB_INSTALL / $WEB_UNIT_SRC (run from the repo root)"
+    return 0
+  fi
+  src_hash="$(hash_api_src)"
+  bin_hash="$( { sha256sum "$WEB_BIN" 2>/dev/null || true; } | awk '{print $1}' )"
+  marker="$(cat "$MARK_DIR/cyberdeck-api.src-hash" 2>/dev/null || true)"
+  if [[ -x "$WEB_BIN" && "$marker" == "$src_hash $bin_hash" ]]; then
+    add_item "web-api-binary" "OK" "converged (install.sh would skip the rebuild via the source+binary hash marker)"
+  else
+    add_item "web-api-binary" "DRIFT" "absent or differs from the sources (apply: go build via $WEB_INSTALL)"
+  fi
+  if [[ ! -f "$WEB_UNIT_DST" ]] || ! cmp -s "$WEB_UNIT_SRC" "$WEB_UNIT_DST" 2>/dev/null; then
+    add_item "web-api-unit" "DRIFT" "absent or differs (apply: install + daemon-reload + enable)"
+  else
+    add_item "web-api-unit" "OK" "byte-identical"
+  fi
+  if [[ ! -f /etc/systemd/system/multi-user.target.wants/cyberdeck-api.service ]]; then
+    add_item "web-api-enabled" "DRIFT" "unit not enabled (apply: systemctl enable --now cyberdeck-api)"
+  else
+    add_item "web-api-enabled" "OK"
+  fi
+  return 0
+}
+
 # ── Ollama local models (docs/setup.md: Managed scope, docs/hardware/npu.md) ─
 # The Ollama binary installs with the vendor image; setup.sh manages its model
 # library: verify row 13 proves the local API is up and the desired models are
@@ -902,8 +981,11 @@ ollama_pull() {
 # ── §3: converge ───────────────────────────────────────────────────────────
 converge() {
   local pkg curdef curhost vncfile
+  # golang-go + apache2: the web UI + metrics API toolchain + web server
+  # (converge §(h); docs/setup.md "Web UI + metrics API").
   local -a PKGS=( x11vnc xvfb xterm openbox dbus-x11 x11-utils fonts-dejavu-core \
-                  python3-xlib python3-libgpiod python3-spidev python3-pil python3-numpy )
+                  python3-xlib python3-libgpiod python3-spidev python3-pil python3-numpy \
+                  golang-go apache2 )
   local -a missing=()
 
   # (a) default target: multi-user (no console getty; headless)
@@ -1068,6 +1150,136 @@ converge() {
       done
     fi
   fi
+
+  # (h) web UI + metrics API (plan 2026-09-19-23-23-36; docs/setup.md).
+  #     Decision 9 order: apt golang-go + apache2 (above, §b) -> confirm
+  #     apache2 -> apache conf + a2enmod/a2enconf -> api/go/install.sh
+  #     (build + unit + health probe) -> deploy api/www/**. Every step
+  #     converges: a re-run changes nothing. No reboot can be needed here
+  #     — cyberdeck-api is (re)started by its own pipeline; apache's loaded
+  #     state is sig-stamped (the reload gate at the end of this block);
+  #     the static deploy never reloads (files are read per request).
+  local www_found=0 f rel sig
+  if (( PLAN_MODE == 0 )); then
+    # confirm §(b) landed apache2: dpkg + its systemd unit file
+    if ! dpkg -s apache2 >/dev/null 2>&1 || [[ ! -f /lib/systemd/system/apache2.service ]]; then
+      log "RESULT: INCOMPLETE:apache2 — apache2 did not land after apt (dpkg -s: $(dpkg -s apache2 2>/dev/null | head -n1 || true))"
+      exit 1
+    fi
+  fi
+
+  # the apache conf (a2enconf needs it in conf-available first); compare-then-write
+  if [[ -f "$APACHE_CONF_SRC" ]]; then
+    write_if_changed "$APACHE_CONF_DST" 644 root "$(cat "$APACHE_CONF_SRC")"
+  else
+    if (( PLAN_MODE == 1 )); then
+      add_item "apache-conf-src" "DRIFT" "missing $APACHE_CONF_SRC (run from the repo root)"
+    else
+      log "RESULT: INCOMPLETE:web-src — missing $APACHE_CONF_SRC"
+      exit 1
+    fi
+  fi
+
+  # proxy modules (the conf is <IfModule>-guarded, but /api/ proxying needs
+  # them for real) + the conf-enabled symlink. Both idempotent.
+  local m
+  for m in proxy proxy_http; do
+    if [[ ! -f "/etc/apache2/mods-enabled/$m.load" ]]; then
+      if (( PLAN_MODE == 1 )); then
+        add_item "apache-mod:$m" "DRIFT" "not enabled (apply: a2enmod $m)"
+      else
+        a2enmod "$m"
+      fi
+    fi
+  done
+  if [[ ! -f /etc/apache2/conf-enabled/cyberdeck.conf ]]; then
+    if (( PLAN_MODE == 1 )); then
+      add_item "apache-conf-enabled" "DRIFT" "cyberdeck.conf enable-symlink absent (apply: a2enconf cyberdeck)"
+    else
+      a2enconf cyberdeck
+    fi
+  fi
+
+  # build + install the Go API: api/go/install.sh owns rebuild-skip (source
+  # hash marker), the unit compare-install, daemon-reload, enable --now (or
+  # restart when the binary changed — a binary change is a unit change in
+  # disguise, same rule as gamepi-sound), and a /health probe; non-zero
+  # exit on any failure. Plan mode records the same decisions without
+  # building (web_api_plan_audit).
+  if (( PLAN_MODE == 1 )); then
+    web_api_plan_audit
+  else
+    if [[ ! -f "$WEB_INSTALL" ]]; then
+      log "RESULT: INCOMPLETE:web-src — missing $WEB_INSTALL (run from the repo root)"
+      exit 1
+    fi
+    if ! bash "$WEB_INSTALL"; then
+      log "RESULT: INCOMPLETE:web-api — api/go/install.sh failed (see its output above)"
+      exit 1
+    fi
+  fi
+
+  # deploy api/www/** contents to /var/www/html/ (index.html becomes the
+  # page root — the distro's placeholder page is replaced on the first
+  # deploy). Per-file compare: a converged re-run writes no bytes; deleted
+  # files are not auto-removed (upsert-only sync by design).
+  if [[ -d "$WEB_WWW" ]]; then
+    while IFS= read -r -d '' f; do
+      www_found=1
+      rel="${f#"$WEB_WWW"/}"
+      if cmp -s "$f" "$WEB_ROOT/$rel" 2>/dev/null; then
+        continue
+      fi
+      if (( PLAN_MODE == 1 )); then
+        add_item "www:$rel" "DRIFT" "absent or differs (apply: install $WEB_WWW/$rel -> $WEB_ROOT/$rel)"
+      else
+        install -D -m 644 "$f" "$WEB_ROOT/$rel"
+        log "applied    $WEB_ROOT/$rel (from $WEB_WWW/$rel)"
+        CHANGED_FILES+=("$WEB_ROOT/$rel")
+        # (the static deploy never reloads apache: files are read per request)
+      fi
+    done < <(find "$WEB_WWW" -type f -print0 | sort -z)
+    if (( www_found == 0 && PLAN_MODE == 1 )); then
+      add_item "www-deploy" "DRIFT" "$WEB_WWW has no files"
+    fi
+  else
+    if (( PLAN_MODE == 1 )); then
+      add_item "www-deploy" "DRIFT" "missing $WEB_WWW (run from the repo root)"
+    else
+      log "RESULT: INCOMPLETE:web-src — missing $WEB_WWW/"
+      exit 1
+    fi
+  fi
+
+  # Convergence of apache's LOADED state, not of this run's writes: a reload
+  # fires when the on-disk conf/module state differs from the last
+  # reloaded one (the stamped sig). This also repairs runs that wrote the
+  # conf and exited BEFORE the reload (run 1, INCOMPLETE:web-api after the
+  # a2enmod/a2enconf step) — the next run loads it even though IT changes
+  # no bytes. A converged re-run loads nothing and re-stamps nothing.
+  if (( PLAN_MODE == 0 )); then
+    sig="$(apache_desired_sig)"
+    if [[ "$(systemctl is-active apache2.service 2>/dev/null || true)" == "active" ]]; then
+      if [[ "$(cat "$APACHE_SIG" 2>/dev/null || true)" != "$sig" ]]; then
+        log "systemd: reloading apache2 (loaded state differs from on-disk conf/modules)"
+        systemctl reload apache2
+      else
+        log "unchanged  apache2 (loaded state matches on-disk conf/modules)"
+      fi
+    else
+      log "systemd: enabling + starting apache2 (was not active)"
+      systemctl enable --now apache2 >/dev/null
+    fi
+    mkdir -p "$MARK_DIR"
+    printf '%s\n' "$sig" > "$APACHE_SIG"
+  else
+    # plan mode: report a pending reload (guarded — before apache2 lands
+    # the packages item already carries the work)
+    if dpkg -s apache2 >/dev/null 2>&1 && \
+       [[ "$(cat "$APACHE_SIG" 2>/dev/null || true)" != "$(apache_desired_sig)" ]]; then
+      add_item "apache-loaded" "DRIFT" "loaded conf/modules differ from on-disk state (apply: reload apache2 + re-stamp $APACHE_SIG)"
+    fi
+  fi
 }
 
 # ── §4: verify (pure observation, no writes) ───────────────────────────────
@@ -1222,6 +1434,41 @@ run_verify() {
     fi
   else
     add_item "ollama-models" "FAIL" "$OLLAMA_HOST_URL unreachable (ollama service absent or down — setup.sh does not manage the service install)"
+  fi
+
+  # web UI + metrics API (plan 2026-09-19-23-23-36; docs/setup.md
+  # "Web UI + metrics API"). As with row 12 pre-v3.6, a --plan run before
+  # the first web-API apply legitimately FAILs these; an apply run that
+  # just provisioned them must PASS all four.
+  st="$(systemctl is-active cyberdeck-api.service 2>/dev/null || true)"
+  if [[ "$st" == "active" ]]; then
+    add_item "api-service" "PASS" "cyberdeck-api.service active"
+  else
+    add_item "api-service" "FAIL" "cyberdeck-api.service is-active: ${st:-absent} (journalctl -u cyberdeck-api)"
+  fi
+
+  if curl -sf --max-time 3 http://127.0.0.1:8080/health 2>/dev/null | grep -q '"ok":true'; then
+    add_item "api-health" "PASS" "127.0.0.1:8080/health returns ok:true (loopback-only bind)"
+  else
+    add_item "api-health" "FAIL" "loopback /health unreachable or body wrong (the API must bind 127.0.0.1 only)"
+  fi
+
+  if curl -sf --max-time 5 http://localhost/api/metrics 2>/dev/null | grep -q 'cpub_thermal_zone'; then
+    add_item "api-proxy" "PASS" "localhost/api/metrics (via Apache) reports cpub_thermal_zone"
+  else
+    add_item "api-proxy" "FAIL" "localhost/api/metrics (via Apache): missing or no cpub_thermal_zone (proxy or API down)"
+  fi
+
+  local web page
+  web="$(curl -sf --max-time 5 http://localhost/ 2>/dev/null || true)"
+  if grep -qi '<!doctype html' <<<"$web" && grep -q 'cyberdeck-system-marker' <<<"$web"; then
+    add_item "api-static" "PASS" "localhost/ serves the deck dashboard (doctype + marker, not the distro placeholder)"
+  else
+    page="wrong or unknown page"
+    if [[ "$web" == *"Ubuntu Default Page"* || "$web" == *"It works"* ]]; then
+      page="the distro placeholder is still served from /var/www/html (re-run apply; the deploy replaces it)"
+    fi
+    add_item "api-static" "FAIL" "localhost/ is not the deck dashboard: $page"
   fi
 
   local i

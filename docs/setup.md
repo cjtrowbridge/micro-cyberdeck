@@ -30,9 +30,12 @@ next repair run converges away.
 | `<DECK_USER>/.config/openbox/autostart` | setup.sh | Compare-then-write against the §6 template (byte-strict). The auto-launched xterm is sized to fit the 960x960 :1 canvas (see the in-template comment in setup.sh §6: the Xvfb is 100 DPI, so `-fs` point-size + columns must stay ≤ ~952 px, else the window overflows the screen). |
 | `<DECK_USER>/.vnc/passwd` | **the user** | Created (with the provided password, or a generated one) only if absent. Never overwritten, never deleted, no reset flag. Rotation is a manual act: `sudo rm <file>`, re-run with `--vnc-pass` (password is max 8 chars — VNC uses the first 8). |
 | System packages + `default.target=multi-user` | setup.sh (idempotent apt/systemctl) | Re-asserted on every run; apt only runs when something is missing. |
-| `/var/lib/micro-cyberdeck/*` (stamp + audit log) | setup.sh | Host-local bookkeeping (git-ignored). The stamp gates the reboot decision. Never hand-edit it; if it becomes suspect, delete the directory — the next run re-derives. |
+| `/var/lib/micro-cyberdeck/*` (stamp + audit log + `apache.loaded-sig`) | setup.sh | Host-local bookkeeping (git-ignored). The stamp gates the reboot decision; `apache.loaded-sig` records the last reloaded Apache web state (conf + mod enables — see the conf row). Never hand-edit it; if it becomes suspect, delete the directory — the next run re-derives (a missing sig costs one extra reload, nothing else). |
 | Ollama model library (local API `http://localhost:11434`) | setup.sh (host `ollama` CLI, `docker exec ollama` fallback) | **Verify-or-pull.** `OLLAMA_MODELS` (`qwen3.5:2b`, `qwen3.5:2b-q8_0`) must be in the local library (Ollama tag convention: exactly one colon separates name from tag — the Q8_0 variant is tag `2b-q8_0`, not `2b:q8_0`, which the registry rejects as `400 Bad Request: invalid model name`) — they are the models pipelines point at through `api.yaml` (Ollama runs **CPU-only** on this SoC; see `docs/hardware/npu.md`). The service install is **not** setup.sh's: on the current board `ollama serve` is a root **Docker container** (name `ollama`, 11434 published; model volume `/var/lib/docker/volumes/ollama/_data` ↔ `/root/.ollama` inside the container) and the host has no `ollama` CLI. Pulls try the host CLI first, then `docker exec ollama ollama pull <name>`; an unreachable API or an unresolvable pull path is reported as verify FAIL / plan DRIFT, not repaired. Absent models are pulled before the verify row runs; a successful second run therefore pulls nothing. `OLLAMA_HOST` overrides are drift — the deck's service is expected on localhost:11434. |
-
+| `api/go` → `/opt/cyberdeck/cyberdeck-api` | setup.sh via `api/go/install.sh` | The Go build of `api/go` (stdlib only, CGO off → one static binary). **Source+binary hash-marker rebuild-skip** (marker `/var/lib/micro-cyberdeck/cyberdeck-api.src-hash`, written by install.sh): a converged re-run rebuilds nothing; a replaced or missing binary — or edited sources — is detected and rebuilt + restarted. In plan mode setup.sh re-derives the same decision itself (no build). |
+| `/etc/systemd/system/cyberdeck-api.service` | setup.sh via `api/go/install.sh` | Compare-then-install from the `api/go/systemd/cyberdeck-api.service` template; `daemon-reload` only when the file was written; **restart only when the binary or unit file changed this run** (a binary change is a unit change in disguise — same rule as `gamepi-sound`); an inactive unit gets `enable --now`; a running-but-unenabled unit gets `enable` for boot persistence. |
+| `/etc/apache2/conf-available/cyberdeck.conf` (+ `conf-enabled` symlink) | setup.sh | Compare-then-write from `api/apache/cyberdeck.conf`; `a2enmod proxy proxy_http` + `a2enconf cyberdeck` run once, idempotently. Keeps the default DocumentRoot and adds only the `/api/` → `127.0.0.1:8080/api/` proxy (the `/api/` prefix is preserved — the Go mux registers its data routes under `/api/`, so a bare-root target would strip it and 404). Apache's **loaded** state converges via `$MARK_DIR/apache.loaded-sig`: when the on-disk conf/module state differs from the last reloaded one, Apache is reloaded and the sig re-stamped — repairing even a run that exited before its own reload; a converged re-run reloads nothing. |
+| `/var/www/html/**` (contents of `api/www/`) | setup.sh | Per-file compare-then-deploy (`install -m 644`): a converged re-run writes no bytes; a deleted remote file is **not** auto-removed (upsert-only sync). `index.html` becomes the page root, replacing the distro placeholder on the first deploy. The vendored Chart.js pin — v4.4.1 UMD, sha256 `74401d738dd3e03ee5dfb3b6841210fe2c4ead8a960c4011ca4ba0b78a9fd8f3` (205125 bytes) — ships inside `api/www/vendor/` and is re-checked by this per-file compare on every run. Apache reloads only on a conf/module state change (sig-stamped — see the conf row); the www deploy needs no reload (files are read per request). |
 Hand edits to any "setup.sh-owned" file are **drift by definition**; the next
 run repairs them. If you need a permanent custom change, change the template in
 §5 of `setup.sh` (and document it here) — the script converges to its templates,
@@ -95,7 +98,17 @@ agents get flags, stable exit codes, and one parseable result line.
    (nothing applied).
 2. **Converge** — apply desired state (scope table; artifacts are the §5–§6
    sections of the script). Every write is compare-then-write: identical
-   bytes never touch disk.
+   bytes never touch disk. After the deck artifacts: (h) web UI + metrics
+   API — confirm `apache2` landed after the package step, then
+   `a2enmod proxy proxy_http` + `a2enconf cyberdeck` (idempotent), then
+   `api/go/install.sh` (source+binary hash-marker rebuild-skip, unit
+   compare-install, `daemon-reload` only when the unit was written, restart
+   only when the binary/unit changed this run — same rule as
+   `gamepi-sound`), then the per-file deploy of `api/www/**` to
+   `/var/www/html/`; Apache's *loaded* state is reloaded-vs-stamped (sig of
+   the on-disk conf + mod enables), so a run interrupted before its own
+   reload is repaired on the next run, and a converged re-run reloads
+   nothing.
 3. **Verify** — see Verification matrix. Pure observation, no writes.
    Immediately before it, in (non-plan) runs, when a unit file was written
    this run, **a new `hat-sound` binary was installed**, or a managed unit is
@@ -114,11 +127,13 @@ agents get flags, stable exit codes, and one parseable result line.
 
 `--plan` replaces the write half of converge with a desired-vs-current
 comparison (unit files, sound source, sysctl drop-in, bridge, autostart,
-overlay lines + stale overlays, packages), then runs verify. It writes **not a single** byte — no files, no apt, no systemctl,
-no stamp, no log line — never reboots, and exits `1` with
-`RESULT: DRIFT:<n>` when any difference or verify failure exists (exit `0`
-only when converged and verify passes). Reboot mode flags are ignored in plan
-mode and never recorded.
+overlay lines + stale overlays, packages, and the web API: the
+re-derived install.sh decisions via the hash markers, the Apache conf /
+enabled modules, and the www deploy), then runs verify. It writes **not a
+single** byte — no files, no apt, no systemctl, no stamp, no log line —
+never reboots, and exits `1` with `RESULT: DRIFT:<n>` when any difference or
+verify failure exists (exit `0` only when converged and verify passes).
+Reboot mode flags are ignored in plan mode and never recorded.
 
 ## Verification matrix
 
@@ -137,6 +152,10 @@ mode and never recorded.
 | 11 | No stale audio-path overlays | no `es8388-audio`/`i2c0` `.dtbo` in `/boot/overlay-user` (or the older directory) and no `i2c-0` under `/sys/bus/i2c/devices` |
 | 12 | HAT sound daemon socket | `[[ -S /run/gamepi-sound.sock ]]` — the v3.6 daemon bound the PCM socket (0666, any user may connect; serialized on accept). Transient: created at unit start (bind), unlinked by the engine on exit, wiped by the tmpfs `/run` at boot. A `--plan` run **before** the first v3.6 apply legitimately FAILs this row (the old unit ran `-i`). |
 | 13 | Ollama model library | GET `http://localhost:11434/api/version` succeeds, and GET `/api/tags` (`jq -r '.models[].name'`) names **every** `OLLAMA_MODELS` entry. Apply mode pulls any missing model before this row runs (§3g — via the host `ollama` CLI when resolvable, else `docker exec ollama ollama pull`, the current board's deployment; the first run on a fresh board may take a while, the second pulls nothing). Plan mode reports absent models as drift instead. An unreachable API or unresolvable pull path is FAIL/DRIFT: the service install (a Docker container in the current deployment) is outside setup.sh's scope. |
+| 14 | Metrics API service | `systemctl is-active cyberdeck-api.service == active` |
+| 15 | Loopback /health | `curl -sf http://127.0.0.1:8080/health` returns `"ok":true` (the API must bind 127.0.0.1 only — a wider bind is drift) |
+| 16 | Apache `/api/` proxy | `curl -sf http://localhost/api/metrics` (through Apache) reports `temps.cpub_thermal_zone` |
+| 17 | Dashboard served | `curl -sf http://localhost/` contains `<!doctype html>` and the `cyberdeck-system-marker` marker — i.e., the deck dashboard, not the distro placeholder ("It works" / "Ubuntu Default Page") |
 
 Implementation notes (live-verified pitfalls, fixed 2026-09-15 — do not revert):
 
@@ -162,8 +181,10 @@ Only overlay changes require a real reboot: any `armbian-add-overlay`
 call whose output actually differs (new `.dtbo`), or a change to the
 `overlays=`/`user_overlays=` lines in `armbianEnv.txt`. Everything else —
 service files, the sound binary, the bridge, the sysctl drop-in, autostart,
-packages, hostname, VNC password, stale-overlay removals — is repaired live
-or takes effect on the next unit start / next boot, and never needs a reboot.
+packages, hostname, VNC password, stale-overlay removals, and the web UI +
+metrics API artifacts (binary, unit, Apache conf, www deploy) — is repaired
+live or takes effect on the next unit start / next boot, and never needs a
+reboot.
 The sysctl drop-in is applied by `systemd-sysctl` at boot; verify proves the
 runtime value from `/proc` either way (and a drop-in write alone never sets
 the reboot flag — the stamp covers overlay state only).
@@ -238,6 +259,9 @@ RESULT: <STATUS>
 | `INCOMPLETE:overlay` | `armbian-add-overlay` failed; overlay state unknown (exit 1). |
 | `INCOMPLETE:sound-src` | `tools/hat-sound.c` missing at apply time (run from the repo root); the sound binary was not touched (exit 1). |
 | `INCOMPLETE:sound-build` | `hat-sound` compilation failed (exit 1). |
+| `INCOMPLETE:apache2` | `apache2` did not land after the package step (dpkg status or its systemd unit file missing) (exit 1). |
+| `INCOMPLETE:web-src` | the `api/` tree is missing at deploy time (`api/apache/cyberdeck.conf`, `api/go/install.sh`, or `api/www/` — run from the repo root) (exit 1). |
+| `INCOMPLETE:web-api` | `api/go/install.sh` failed (build, unit install, or its `/health` probe) (exit 1). |
 | `INCOMPLETE:interrupted` | Ctrl+C during a run; truthful state line precedes it (exit 130). |
 | `CONVERGED_REBOOT_PENDING` | Converged + verify passed; reboot needed but not performed (exit 3). |
 
@@ -313,6 +337,43 @@ connections.
 Stale audio-path overlays (`es8388-audio`, `i2c0`) are removed on every
 apply run: the HAT amplifier is GPIO/PWM, not I2S (verified 2026-09-15), so
 these dtbos bind nothing — a zombie probe at every boot.
+
+## Web UI + metrics API
+
+`setup.sh` provisions the deck page and its data as part of Converge (phase
+2h, after the deck artifacts; scope rows above):
+
+- **Dashboard:** the contents of `api/www/` — `index.html` + `style.css` +
+  `main.js` plus the vendored **Chart.js v4.4.1 UMD** (sha256
+  `74401d738dd3e03ee5dfb3b6841210fe2c4ead8a960c4011ca4ba0b78a9fd8f3`,
+  205125 bytes — no network fetch at deploy time) — are deployed
+  compare-then-write into Apache's default document root `/var/www/html/`;
+  `index.html` becomes the page root, replacing the distro placeholder on
+  the first deploy. No reboot is ever involved: the files are read per
+  request.
+- **Metrics API:** `api/go` (Go stdlib only, CGO off → one static binary at
+  `/opt/cyberdeck/cyberdeck-api`) is built/installed by
+  `api/go/install.sh`; see the scope rows for the hash-marker rebuild-skip
+  and the start/enable rules. The unit **binds 127.0.0.1:8080 only** — no
+  LAN exposure by design.
+- **Proxy:** `/etc/apache2/conf-available/cyberdeck.conf`
+  (`ProxyPass /api/` → `http://127.0.0.1:8080/api/` — the prefix is kept,
+  matching the Go routes) plus `a2enmod proxy proxy_http` +
+  `a2enconf cyberdeck`, idempotent; Apache's loaded state is
+  reloaded-vs-stamped by sig (`apache.loaded-sig`), so an interrupted run is
+  repaired on the next one.
+
+The browser-facing surface is therefore Apache on `:80`; the metrics
+origins are loopback-only. Endpoints: `GET /health`, `GET /api/metrics`
+(live snapshot: thermal zones, CPU%, RAM/swap, disk, fan duty + state),
+`GET /api/history?minutes=N` (per-minute buckets: the last N completed
+minutes plus the live in-progress bucket as the moving final point).
+
+**Troubleshooting:** when a "dashboard stale/blank" report comes in on a
+healthy deck, suspect the API, not Apache — rows 14 → 15 → 16 isolate
+service → loopback → proxy in order, and `journalctl -u cyberdeck-api`
+covers the server side. A "It works"/placeholder page at `/` means the www
+deploy did not land (row 17): re-run converge.
 
 ## Agent usage (recommended loop)
 

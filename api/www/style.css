@@ -1,0 +1,132 @@
+/* cyberdeck — dark cyberdeck theme (single tab: System). No framework. */
+
+:root {
+  --bg: #0b0e14;
+  --panel: #11151f;
+  --line: #1e2432;
+  --ink: #dbe2ee;
+  --dim: #7d8aa0;
+  --ok: #38d17f;
+  --warn: #f5b942;
+  --hot: #ff5f56;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 "DejaVu Sans Mono", ui-monospace, monospace;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand { display: flex; gap: 14px; align-items: baseline; }
+.host { font-size: 16px; font-weight: 700; letter-spacing: 0.04em; }
+.tab {
+  color: var(--dim);
+  border: 1px solid var(--line);
+  padding: 2px 10px;
+  border-radius: 10px;
+}
+.tab.active { color: var(--ink); border-color: var(--dim); }
+
+.chips { display: flex; gap: 8px; }
+.chip {
+  border: 1px solid var(--line);
+  padding: 2px 10px;
+  border-radius: 10px;
+  color: var(--dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+#fresh-dot.fresh { color: var(--ok); border-color: var(--ok); }
+#fresh-dot.stale { color: var(--warn); border-color: var(--warn); }
+#fresh-dot.dead  { color: var(--hot);  border-color: var(--hot); }
+
+main {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+.card.wide { grid-column: 1 / 3; }
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+
+.zone-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.zone {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px 10px;
+  background: var(--bg);
+}
+.zone .zname { color: var(--dim); font-size: 12px; }
+.zone .zval { font-size: 16px; font-variant-numeric: tabular-nums; }
+
+.chart-box { height: 260px; }
+
+.kv { margin: 0; font: inherit; font-variant-numeric: tabular-nums; white-space: pre; }
+.kv.small { color: var(--dim); font-size: 12px; }
+
+.bar {
+  position: relative;
+  height: 18px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  background: var(--bg);
+}
+.bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #1f6feb, #38d17f);
+  transition: width 0.5s ease;
+}
+.bar-fill.hot { background: linear-gradient(90deg, #f5b942, #ff5f56); }
+.bar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+footer {
+  padding: 8px 16px 16px;
+  color: var(--dim);
+  font-size: 11px;
+}
+footer .marker { opacity: 0.5; }
+
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; }
+  .card.wide { grid-column: auto; }
+}

@@ -2,7 +2,7 @@
 plan_id: 2026-09-19-23-23-36_cyberdeck-webui-go-api
 title: Cyberdeck web UI (static Apache dashboard) + Go API — bootstrap System tab
 summary: Add a Golang metrics API (thermal zones, RAM, / disk, fan, CPU, uptime) behind a systemd unit and a static Chart.js dashboard with a bootstrap "System" tab that polls every 5 s; layout is api/go (code + build/install pipeline) and api/www (static files setup.sh installs to /var/www/html once apache2 is confirmed); provisioned through setup.sh with a documented contract change and live apply->verify.
-status: future
+status: past
 created_at: 2026-09-19-23-23-36
 ---
 
@@ -110,94 +110,142 @@ hour chart, RAM card, /-partition card) that refreshes every 5 seconds.
 
 ## Tasks
 
-- [ ] 1. Build the System-tab dashboard + API (bootstrap, under `api/`).
+- [x] 1. Build the System-tab dashboard + API (bootstrap, under `api/`).
   - [ ] 1.1 Go API (`api/go/`, module name to be set in `go.mod`, e.g.
         `deck.cyberdeck/api`), codebase **and** its build/install pipeline.
-    - [ ] 1.1.1.1 Scaffolding: `api/go/go.mod` (go version matching apt
+    - [x] 1.1.1.1 Scaffolding: `api/go/go.mod` (go version matching apt
           `golang-go`), `api/go/main.go` — env `CYBERDECK_ADDR`
           (default `127.0.0.1:8080`), `main` assembles handlers, graceful
           shutdown on SIGTERM.
-    - [ ] 1.1.1.2 Sampler: 5 s ticker goroutine -> ring buffer of 720
+    - [x] 1.1.1.2 Sampler: 5 s ticker goroutine -> ring buffer of 720
           `{ts, temps, mem, disk, cpu_util, load, fan}`; every read source
           wrapped so a missing sysfs path degrades to `null` for that field
           (API never crashes on a missing sensor).
-    - [ ] 1.1.1.3 Temp discovery at startup (`/sys/class/thermal/thermal_zone*`
+    - [x] 1.1.1.3 Temp discovery at startup (`/sys/class/thermal/thermal_zone*`
           -> type names); snapshot + history carry the discovered set.
-    - [ ] 1.1.1.4 `/health` handler (JSON `{"ok":true}`).
-    - [ ] 1.1.1.5 `/api/metrics` handler (current tick, JSON schema of §7).
-    - [ ] 1.1.1.6 `/api/history?minutes=60` handler — per-minute buckets
+    - [x] 1.1.1.4 `/health` handler (JSON `{"ok":true}`).
+    - [x] 1.1.1.5 `/api/metrics` handler (current tick, JSON schema of §7).
+    - [x] 1.1.1.6 `/api/history?minutes=60` handler — per-minute buckets
           (avg of the enclosing 5 s samples) over the last N minutes, plus
           the live partial bucket as the final point.
-    - [ ] 1.1.1.7 CPU utilization: keep prior `/proc/stat` aggregate jiffies,
+    - [x] 1.1.1.7 CPU utilization: keep prior `/proc/stat` aggregate jiffies,
           delta per tick; first tick reports `null`.
-    - [ ] 1.1.1.8 Unit file `api/go/systemd/cyberdeck-api.service` (static,
+    - [x] 1.1.1.8 Unit file `api/go/systemd/cyberdeck-api.service` (static,
           `User=root`, `ExecStart=/opt/cyberdeck/cyberdeck-api`,
           `Restart=on-failure`, `WantedBy=multi-user.target`).
-    - [ ] 1.1.1.9 `api/go/install.sh` — the build/install pipeline:
+    - [x] 1.1.1.9 `api/go/install.sh` — the build/install pipeline:
           `go build -o /opt/cyberdeck/cyberdeck-api` (cache-skip via a
           source-hash marker so converged re-runs don't rebuild), install
           unit, `systemctl daemon-reload`, `systemctl enable --now
           cyberdeck-api`; exits non-zero on any failure; idempotent.
   - [ ] 1.2 Apache conf + vendored chart.
-    - [ ] 1.2.1.1 `api/apache/cyberdeck.conf`: **default DocumentRoot kept**
+    - [x] 1.2.1.1 `api/apache/cyberdeck.conf`: **default DocumentRoot kept**
           (serves `/var/www/html`) + `ProxyPass /api/` /
-          `ProxyPassReverse /api/` -> `http://127.0.0.1:8080/`; no other
-          virtual-host behavior changes.
-    - [ ] 1.2.1.2 Vendor Chart.js (pin version + checksum) into
+          `ProxyPassReverse /api/` -> `http://127.0.0.1:8080/api/` (**the
+          `/api/` prefix is preserved** — the Go mux registers its data
+          routes under `/api/`, so a bare-root target would strip it and the
+          API would answer 404; found + fixed on the first live converge,
+          2026-09-20); no other virtual-host behavior changes.
+    - [x] 1.2.1.2 Vendor Chart.js (pin version + checksum) into
           `api/www/vendor/chart.umd.js` (tracked in git) — download once when
           the file is created, not at every provision.
   - [ ] 1.3 Web UI (`api/www/`: `index.html`, `main.js`, `style.css`,
         `vendor/`) — the contents are what `setup.sh` installs into
         `/var/www/html/` (so `index.html` is the page root).
-    - [ ] 1.3.1.1 Tab shell + System tab; dark theme; card grid layout.
-    - [ ] 1.3.1.2 Header: URL-host label, uptime chip, freshness dot.
-    - [ ] 1.3.1.3 Temps card (zone chips) + per-minute/hour line chart
+    - [x] 1.3.1.1 Tab shell + System tab; dark theme; card grid layout.
+    - [x] 1.3.1.2 Header: URL-host label, uptime chip, freshness dot.
+    - [x] 1.3.1.3 Temps card (zone chips) + per-minute/hour line chart
           (Chart.js, one series per zone, live-point update on 5 s tick,
           no full-chart re-render — `chart.update()` data mutation).
-    - [ ] 1.3.1.4 Memory card: used/free/available/total + bar, swap row.
-    - [ ] 1.3.1.5 Disk card: used/free/total + percent bar (red >80 %).
-    - [ ] 1.3.1.6 Fan card: duty % + cooling state.
-    - [ ] 1.3.1.7 5 s poller (setInterval, single-flight guard) for
+    - [x] 1.3.1.4 Memory card: used/free/available/total + bar, swap row.
+    - [x] 1.3.1.5 Disk card: used/free/total + percent bar (red >80 %).
+    - [x] 1.3.1.6 Fan card: duty % + cooling state.
+    - [x] 1.3.1.7 5 s poller (setInterval, single-flight guard) for
           `/api/metrics` + `/api/history`; stale-state handling keeps last
           good data visible and turns the dot red.
   - [ ] 1.4 Provisioning (`setup.sh`).
-    - [ ] 1.4.1.1 `setup.sh` managed section, in order: apt `golang-go` +
+    - [x] 1.4.1.1 `setup.sh` managed section, in order: apt `golang-go` +
           `apache2` -> **confirm apache2 installed** (dpkg status + service
           present, fail visibly otherwise) -> `a2enmod proxy proxy_http` +
           `a2enconf cyberdeck` -> `bash api/go/install.sh` -> deploy
           `api/www/**` contents to `/var/www/html/` (replace the distro's
           default `index.html` — expected on this image); all idempotent
-          (re-run: no changes when converged).
-    - [ ] 1.4.1.2 `setup.sh` verify rows: `cyberdeck-api.service` active;
+          (re-run: no changes when converged). Apache's *loaded* state
+          converges via a sig file (`apache.loaded-sig`), not via "wrote a
+          conf/module THIS run": run 3 exposed that a conf-content-only
+          change left Apache serving the previous proxy target until a
+          manual reload (and run 1's interrupted build would never have
+          triggered one).
+    - [x] 1.4.1.2 `setup.sh` verify rows: `cyberdeck-api.service` active;
           `curl 127.0.0.1:8080/health` ok; `curl localhost/api/metrics`
           (through Apache) has `temps.cpub_thermal_zone` present;
           `curl localhost/` serves the dashboard (e.g. `<!doctype html>` +
           a marker string from the page) and **not** the distro placeholder.
-    - [ ] 1.4.1.3 `docs/setup.md`: document the new managed scope (`api/`
+    - [x] 1.4.1.3 `docs/setup.md`: document the new managed scope (`api/`
           layout, units, ports 80/8080, `/var/www/html` deploy, idempotency,
           troubleshooting) **in the same change** (mandate); `AGENTS.md`
           link audit (doc already linked).
-    - [ ] 1.4.1.4 `.vscode/tasks.json`: "GamePi: set up the machine" remains
+    - [x] 1.4.1.4 `.vscode/tasks.json`: "GamePi: set up the machine" remains
           the single entrypoint (setup.sh) — no new task; note the new
           managed scope only if the existing task description names scopes.
-- [ ] 2. Verify.
-  - [ ] 2.1 Unit-level.
-    - [ ] 2.1.1.1 `gofmt` + `go vet` + `go build` clean in `api/go`.
-    - [ ] 2.1.1.2 Run the binary with a temp addr; `curl /health`,
+- [x] 2. Verify.
+  - [x] 2.1 Unit-level.
+    - [x] 2.1.1.1 `gofmt` + `go vet` + `go build` clean in `api/go` (also
+          `go test` — a regression test for the `readCPUJiffy` parse below).
+    - [x] 2.1.1.2 Run the binary with a temp addr; `curl /health`,
           `/api/metrics`, `/api/history?minutes=60`; assert JSON fields,
           8 temp keys, history length ≈ 61 incl. live point, per-minute
-          bucketing.
-  - [ ] 2.2 Live board.
-    - [ ] 2.2.1.1 `sudo bash setup.sh --plan` from the current state
+          bucketing (all asserted 2026-09-20; this pass also caught the
+          `SplitN(…, 1)` bug in `readCPUJiffy` — it returned the whole file
+          as one line, so `cpu_util_pct` was permanently nil; fixed +
+          guarded by the unit test).
+    - [x] 2.2 Live board. (2026-09-20: runs #1–5 below, 2.2.1.1–3 all green)
+    - [x] 2.2.1.1 `sudo bash setup.sh --plan` from the current state
           (read-only; record exactly what it would install/change for this
           feature — apt go + apache, the conf, the unit, the `/var/www/html`
           deploy), then `sudo bash setup.sh --yes` -> `RESULT: CONVERGED`.
-    - [ ] 2.2.1.2 Re-run: no file churn, still converged (re-run contract).
-    - [ ] 2.2.1.3 Browser: open `http://<deck>/`; confirm all four cards,
+          (Live, 2026-09-20: `--plan` first pass recorded `DRIFT:16` — the
+          full web stack pending; four `--yes` runs carried it to
+          CONVERGED: #1 apt + first apply, failed at the then-missing Go
+          toolchain build; #2 applied everything (row 16 FAILED — the
+          conf's `ProxyPass` target stripped the `/api/` prefix the Go mux
+          keeps, found from Go's 404 body passing through Apache; fixed
+          in same change); #3 rewrote the conf + rebuilt/installed the
+          binary with the `readCPUJiffy` SplitN fix, but exited
+          INCOMPLETE:verify because apache's LOADED copy stayed stale —
+          the `web_changed` reload gate missed conf-content writes; that
+          hole became the sig-stamped reload gate in 1.4.1.1's follow-up);
+          #4 `systemd: reloading apache2 (loaded state differs from
+          on-disk conf/modules)` (first stamp) -> rows 14–17 all PASS,
+          `no file changes (byte-stable)`, `RESULT: CONVERGED`, exit 0.
+          Post-check through Apache: `/api/metrics` full JSON, `/` the
+          dashboard, `/api/history?minutes=5` = 6 pts step 60.)
+    - [x] 2.2.1.2 Re-run: no file churn, still converged (re-run contract).
+          (Live, 2026-09-20, run #5: every artifact `unchanged` incl. the
+          conf + unit; `unchanged apache2 (loaded state matches on-disk
+          conf/modules)` — no reload; rows 14–17 PASS; `no file changes
+          (byte-stable)`; `RESULT: CONVERGED`, exit 0. apache2 worker
+          etime 14:52 -> 30 s across run #4 proved the reload landed and
+          the loaded copy is the prefix-preserving conf.)
+    - [x] 2.2.1.3 Browser: open `http://<deck>/`; confirm all four cards,
           chart renders, values move on the 5 s tick, dot stays green;
           `curl localhost/api/metrics` through Apache works.
-  - [ ] 2.3 Governance.
-    - [ ] 2.3.1.1 Journal entry (design + live results); plan indexes
+          (Live, 2026-09-20, via Apache on the board — the same origin a
+          LAN client hits: all four cards rendered with live data —
+          8 temp rows, mem 20.4 %, disk 89.4 % with the >80 % warning ▲,
+          fan duty 100 % state 4/4 (governor); chart canvas 211x260
+          backing store with 53/340 sampled pixels non-transparent
+          (Chart.js lines carry sparse ink — non-zero proves a draw); two
+          DOM samples 7 s apart — every temp row changed
+          (e.g. ddr 46.2->45.5, gpu 46.3->47.3), mem 20.4->21.3 %, uptime
+          chip 11h 34m -> 11h 35m (5 s tick live); freshness dot "• live"
+          (green) in both samples. `curl localhost/api/metrics` through
+          Apache: full JSON, row 16 PASS.)
+  - [x] 2.3 Governance. (journal `journal/2026-09-20-webui-go-api-live.md`;
+          indexes regenerated after the `current -> past` move; promotion
+          `future -> current` was done before the first implementation edit
+          on 2026-09-19; hardware-record reuse noted in the journal)
+    - [x] 2.3.1.1 Journal entry (design + live results); plan indexes
           regenerated (`python agentic-pipelines/scripts/regenerate_plan_indexes.py --repo-root .`);
           promote plan `future -> current` before first implementation edit;
           hardware records: no new sensor research expected (all sources
@@ -206,14 +254,18 @@ hour chart, RAM card, /-partition card) that refreshes every 5 seconds.
 
 ## Deferred (explicit, for a follow-up plan)
 
-- [ ] 3.1 Auth/TLS (or tunnel-first access) for the HTTP surface.
-- [ ] 3.2 Action endpoints (reboot, service start/stop) + UI buttons — needs
+- [-] 3.1 Auth/TLS (or tunnel-first access) for the HTTP surface.
+- [-] 3.2 Action endpoints (reboot, service start/stop) + UI buttons — needs
       the safety story from 3.1 first.
-- [ ] 3.3 History persistence across reboots (append-only ring file).
-- [ ] 3.4 More tabs: Network (IP/Wi-Fi), NPU (VPM activity), Audio (engine
+- [-] 3.3 History persistence across reboots (append-only ring file).
+- [-] 3.4 More tabs: Network (IP/Wi-Fi), NPU (VPM activity), Audio (engine
       status), Battery (blocked on the missing fuel-gauge work in
       `docs/hardware/battery.md`).
-- [ ] 3.5 History charts for RAM/disk (the ring already carries them).
-- [ ] 3.6 Fan control UI (write `pwm1`) — needs the DTB-overlay policy work
+- [-] 3.5 History charts for RAM/disk (the ring already carries them).
+- [-] 3.6 Fan control UI (write `pwm1`) — needs the DTB-overlay policy work
       in `docs/hardware/fan.md` first; do not bypass the kernel governor
       from the dashboard.
+
+  (All six intentionally closed with this plan, 2026-09-20: the 3.x scope is
+  the explicit backlog for the next webui plan — 3.1 before anything that
+  widens the HTTP surface beyond read-only; 3.6 gated on the fan DTB work.)

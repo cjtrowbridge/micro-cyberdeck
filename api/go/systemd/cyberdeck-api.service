@@ -1,0 +1,14 @@
+[Unit]
+Description=cyberdeck metrics API (loopback 127.0.0.1:8080; Apache proxies /api/)
+After=network.target
+
+[Service]
+Type=simple
+# Static binary (CGO off, stdlib only) — zero runtime dependencies.
+ExecStart=/opt/cyberdeck/cyberdeck-api
+Environment=CYBERDECK_ADDR=127.0.0.1:8080
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
