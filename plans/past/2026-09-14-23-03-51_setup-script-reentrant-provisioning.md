@@ -2,7 +2,7 @@
 plan_id: 2026-09-14-23-03-51_setup-script-reentrant-provisioning
 title: Reentrant setup.sh as canonical provisioning entrypoint
 summary: Convert setup.sh from a one-shot installer into a converging, self-verifying, flag-driven provisioning tool; document the contract in docs/setup.md; add the single VS Code entrypoint; mandate setup.sh change documentation.
-status: current
+status: past
 created_at: 2026-09-14-23-03-51
 ---
 

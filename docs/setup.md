@@ -355,7 +355,9 @@ these dtbos bind nothing — a zombie probe at every boot.
   `/opt/cyberdeck/cyberdeck-api`) is built/installed by
   `api/go/install.sh`; see the scope rows for the hash-marker rebuild-skip
   and the start/enable rules. The unit **binds 127.0.0.1:8080 only** — no
-  LAN exposure by design.
+  LAN exposure by design; the LAN-facing surface is Apache's default
+  `Listen 80`, which binds all interfaces (0.0.0.0:80) and serves both the
+  dashboard and `/api/` (distro default, not a managed row).
 - **Proxy:** `/etc/apache2/conf-available/cyberdeck.conf`
   (`ProxyPass /api/` → `http://127.0.0.1:8080/api/` — the prefix is kept,
   matching the Go routes) plus `a2enmod proxy proxy_http` +
@@ -363,8 +365,9 @@ these dtbos bind nothing — a zombie probe at every boot.
   reloaded-vs-stamped by sig (`apache.loaded-sig`), so an interrupted run is
   repaired on the next one.
 
-The browser-facing surface is therefore Apache on `:80`; the metrics
-origins are loopback-only. Endpoints: `GET /health`, `GET /api/metrics`
+The browser-facing surface is therefore Apache on `:80` (all interfaces —
+http://<board-ip>/ from the LAN); the metrics origins are loopback-only.
+Endpoints: `GET /health`, `GET /api/metrics`
 (live snapshot: thermal zones, CPU%, RAM/swap, disk, fan duty + state),
 `GET /api/history?minutes=N` (per-minute buckets: the last N completed
 minutes plus the live in-progress bucket as the moving final point).
