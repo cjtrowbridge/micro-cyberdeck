@@ -128,7 +128,8 @@ Here you can see she has vs code open and she is working on herself. Hopefully s
 ## Setup
 
 One entrypoint provisions and heals the whole machine — display stack, services,
-VNC, hostname, SPI overlay — as a **re-entrant converge**:
+VNC, the web dashboard + its metrics API, the browser SSH/VNC bridges, hostname,
+SPI overlay — as a **re-entrant converge**:
 
 ```bash
 sudo bash setup.sh
@@ -145,12 +146,38 @@ sudo bash setup.sh
 - VS Code: the **GamePi: set up the machine** task / play action
   (`.vscode/`) runs the same command in an integrated terminal, so the sudo
   prompt and the one reboot question stay visible and answerable.
-- Browser access, no client software: the dashboard's Access card links
-  **Desktop** (`/vnc/vnc.html` — noVNC over the websockify bridge on :6080,
-  VNC password) and **Terminal** (`/shell/` — ShellInABox on :4200, PAM
-  login, same credentials as SSH); both bind 0.0.0.0 on a trusted-LAN
-  board and are reached same-origin through Apache on :80 (details in
-  `docs/setup.md`, "Browser access").
+- The deck is **web-first**: from any device on the LAN you open the web
+  dashboard and get browser-based **SSH** and **VNC** with no client software
+  to install. Apache on `:80` is the single browser origin — every surface
+  below is reached from its URLs:
+  - **Dashboard** `http://<board>/` — a self-contained system page (live
+    temperatures, CPU, RAM/swap, disk, fan) fed by the Go API through Apache
+    `/api/`, plus an **Access** card carrying the two links below.
+  - **Desktop (VNC)** `http://<board>/vnc/vnc.html` — the vendored noVNC
+    client; its WebSocket tunnels over Apache (`mod_proxy_wstunnel`) to
+    `websockify` on `:6080`, which bridges to the desktop's `x11vnc` on
+    `:5900`. Auth is the existing VNC password.
+  - **Terminal (SSH)** `http://<board>/shell/` — ShellInABox on `:4200`:
+    a real SSH session (PAM login, same credentials as `ssh`) in the
+    browser, rendered **dark** to match the dashboard (a managed theme is
+    appended over the binary's stock light css — `docs/setup.md`,
+    "Browser access").
+  - Both bridge listeners bind `0.0.0.0` by direction on a trusted-LAN board
+    and are reached same-origin through Apache; raw VNC never crosses the
+    wire (the `6080` leg is the browser's WebSocket — `websockify` dials
+    `x11vnc` on loopback). Auth/TLS and action endpoints remain deferred
+    (plan 2026-09-19-23-23-36 §3.1).
+- Ports (all provisioned + verified by `setup.sh` — see the matrix in
+  [docs/setup.md](docs/setup.md)):
+
+  | Port | Bind | Surface | Notes |
+  |---|---|---|---|
+  | `22` | `0.0.0.0` | OpenSSH | native `ssh` (same PAM credentials as the browser Terminal) |
+  | `80` | `0.0.0.0` | Apache — browser origin | dashboard, `/api/`, `/vnc/` client, `/shell/` |
+  | `8080` | `127.0.0.1` | Go metrics API | loopback-only by design, reached via `/api/` |
+  | `4200` | `0.0.0.0` | ShellInABox | browser SSH (PAM), dark-themed; also at `/shell/` |
+  | `5900` | `0.0.0.0` | x11vnc (RFB) | the 960x960 `:1` desktop; the raw target behind noVNC |
+  | `6080` | `0.0.0.0` | websockify (WS→RFB) | bridges `/vnc/websockify` to `x11vnc`; VNC password |
 - The display is a single 960x960 `:1` desktop by design (the ST7789 panel
   is 4:1 down-scaled from it; VNC serves the 960 view on 5900). The one-time
   480->960 migration is complete and its rescue scripts retired (2026-09-19);
