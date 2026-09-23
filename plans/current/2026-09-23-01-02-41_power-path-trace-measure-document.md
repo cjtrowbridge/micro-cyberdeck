@@ -280,7 +280,15 @@ in a journal note that WS1/WS2 cite.
 Every result feeds `pmic-axp8191.md` / `battery.md` in the same change as
 its journal note.
 
-- [ ] 1.1 Operator (D3): `sudo apt-get install -y i2c-tools`.
+- [x] 1.1 Operator (D3): `sudo apt-get install -y i2c-tools`.
+      DONE 2026-09-23 — `dpkg -s i2c-tools` → `Status: install ok
+      installed` (operator ran the sudo; verified agent-side). Note: the
+      `/dev/i2c-*` nodes remained `root:i2c` after the install and user
+      `cj` is not in the `i2c` group, so 1.2/1.3 still run under the
+      operator's `sudo`. One-sudo wrapper: `tools/i2c_power_probe.sh`
+      (sections 2–3 are the reads; section 1 is an unprivileged sysfs
+      snapshot), run as
+      `sudo bash tools/i2c_power_probe.sh 2>&1 | tee /tmp/ws1_i2c_probe.log`.
 - [ ] 1.2 Operator: read-only chip-ID reads on both live addresses —
       `sudo i2cget -y 13 0x34 0x00` … registers `0x00`–`0x06` on `0x34`,
       same on `0x36`. (Safe: read-only; the AXP ID register family sits in

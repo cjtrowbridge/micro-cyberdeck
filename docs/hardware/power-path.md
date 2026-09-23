@@ -51,10 +51,11 @@ circuit and the SBC's [AXP8191 PMIC](pmic-axp8191.md) has not been traced.
   configuration-as-observed, not something a `setup.sh` verify row checks.
 - The SBC-side USB-C all-zero reading: re-probe
   `cat /sys/class/power_supply/tcpm-source-psy-14-0022/{type,online,voltage_now,current_now}`
-  (expect `USB`, `0`, `0`, `0` in the HAT-powered config) — the older
-  `in0_input`/`curr1_input` names no longer exist on this kernel (property
-  naming changed; verified 2026-09-23, WS0 re-probe, journal
-  `2026-09-23-power-path-ws0-baseline.md`); see
+  (expect `USB`, `0`, `0`, `0` in the HAT-powered config); the older
+  hwmon-style `in0_input`/`curr1_input` names are no longer at the top
+  level of the node but live in its `hwmon0` child (still all zero —
+  naming/path changed, the all-zero state did not; verified 2026-09-23,
+  WS0 re-probe, journal `2026-09-23-power-path-ws0-baseline.md`); see
   [usbc-power.md](usbc-power.md) for the exact node.
 - No journal entry documents a "both plugged in" or "SBC-USB-C-only" test
   yet — that's the point of this row existing as **Not started** rather than

@@ -17,9 +17,11 @@ controller on `i2c-14` at address `0x22`, handled by the kernel's TCPM
   (`online`, `voltage_now`, `current_now`, `voltage_max`/`voltage_min`,
   `current_max`) reads **0**; `usb_type` reads `[C] PD PD_PPS`. The node
   also carries a `hwmon0` child. (The September-2026 record named the
-  properties `in0_input`/`curr1_input`; those files no longer exist on this
-  kernel — naming changed, all-zero state unchanged; verified by re-probe
-  2026-09-23, journal
+  properties `in0_input`/`curr1_input`; on this kernel they moved into the
+  `hwmon0` child of the node — `in0_input`, `in0_min`, `in0_max`,
+  `curr1_input`, `curr1_max` there all still read 0. The naming/path
+  changed; the all-zero state did not. Verified by re-probe 2026-09-23,
+  journal
   [2026-09-23-power-path-ws0-baseline.md](../../journal/2026-09-23-power-path-ws0-baseline.md).)
 - In the deck's normal configuration (powered from the **HAT's microUSB**,
   see [power-path.md](power-path.md)), **this is expected and correct, not a
@@ -38,7 +40,10 @@ controller on `i2c-14` at address `0x22`, handled by the kernel's TCPM
   `cat /sys/class/power_supply/tcpm-source-psy-14-0022/type` (`USB`),
   `cat …/online` (0), `cat …/voltage_now` (0), `cat …/current_now` (0),
   `cat …/usb_type` (`[C] PD PD_PPS`); note the older `in0_input` /
-  `curr1_input` property names are gone from this kernel.
+  `curr1_input` property names are not at the top level anymore — they
+  moved into the node's `hwmon0` child (`…/hwmon0/in0_input`, `…/hwmon0/
+  curr1_input`, etc., all still 0) — a packaged read-only probe script,
+  `tools/i2c_power_probe.sh`, captures the whole snapshot in one `sudo`.
 - The node-to-chip mapping (`14-0022` = fUSB302 on `i2c-14`) is confirmed
   **without root**: `cat /sys/bus/i2c/devices/14-0022/name` → `fusb302`,
   and `ls -l …/14-0022/driver` → binds `typec_fusb302`.

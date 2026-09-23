@@ -14,16 +14,21 @@ no writes anywhere. `setup.sh` is not involved.
   consequence: no `capacity` / `voltage_now` / `status` anywhere.
 - `/sys/class/power_supply/` holds exactly one device:
   `tcpm-source-psy-14-0022`, `type=USB`.
-- **Naming drift vs. the September-2026 records:** the property files are
-  no longer `in0_input` / `curr1_input` — `cat` on both names returns
-  "No such file or directory". The current property set is the
-  upstream-style naming: `online=0`, `voltage_now=0`, `voltage_max=0`,
-  `voltage_min=0`, `current_now=0`, `current_max=0`,
-  `usb_type=[C] PD PD_PPS` — plus a **`hwmon0` child** the earlier record
-  does not mention. Every value reads zero: in the HAT-powered
-  configuration the fUSB302 on `i2c-14` @ `0x22` has nothing on the SBC's
-  own port to negotiate, so the idle-stub reading is **expected, not a
-  fault** (unchanged interpretation).
+- **Naming drift vs. the September-2026 records:** the *top-level* node's
+  property files are no longer the hwmon-style `in0_input` / `curr1_input` —
+  `cat` on both names at the top level returns "No such file or directory".
+  The top level now carries upstream-style power-supply properties:
+  `online=0`, `voltage_now=0`, `voltage_max=0`, `voltage_min=0`,
+  `current_now=0`, `current_max=0`, `usb_type=[C] PD PD_PPS`. The legacy
+  names were **moved, not removed**: the node now has a **`hwmon0` child**
+  (a child the earlier records do not mention) whose files include
+  `in0_input`, `in0_min`, `in0_max`, `curr1_input`, `curr1_max`, `name=
+  tcpm_source_psy_14_0022` — all the input/current values still read
+  **zero**, so the record's all-zero finding is unchanged, only the
+  path moved. In the HAT-powered configuration the fUSB302 on `i2c-14` @
+  `0x22` has nothing on the SBC's own port to negotiate, so the
+  idle-stub reading is **expected, not a fault** (unchanged
+  interpretation).
 - `power-path.md`'s re-probe command was updated in this same change to
   the current property names.
 
