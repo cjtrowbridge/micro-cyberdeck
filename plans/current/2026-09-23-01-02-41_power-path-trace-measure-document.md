@@ -44,9 +44,11 @@ findings (standing rule).
   documentation; `setup.sh` is touched only if WS3 lands a service, in
   which case the standing mandate applies: `docs/setup.md` updated in the
   same change and live `apply -> verify` on this board before commit.
-  *(EXECUTION NOTE 2026-09-23: D3's `i2c-tools` install is still pending
-  operator approval; everything run on the board so far is unprivileged
-  sysfs reads.)*
+  *(EXECUTION NOTE 2026-09-23: **D1–D4 all decided 2026-09-23** — USB
+  power meter available (D1); cell installed, roughly 50 %+ charge (D2);
+  i2c-tools install approved, operator runs the sudo (D3); config (b)
+  discharge stops at ~80 % remaining with immediate recharge (D4).
+  Everything run on the board so far is unprivileged sysfs reads.)*
 - **Cell health is a constraint.** The config-(b) work can discharge the
   11.1 Wh LiPo. Discharge tests are controlled: a plug-in power source is
   at hand before the feed is removed, and the test stops at the agreed
@@ -115,24 +117,33 @@ findings (standing rule).
 
 ## Operator decisions needed up front
 
-- [ ] **D1 — Metering.** Is a USB power meter / inline multimeter setup
+- [x] **D1 — Metering.** Is a USB power meter / inline multimeter setup
       available for each input port (or should one be procured)? If no,
       WS2 proceeds in software-observable mode and the row caps at
-      Partial. (Blocks 2.2–2.5 depth, not 2.1.)
-- [ ] **D2 — Cell presence & state.** Is the 11.1 Wh LiPo currently
+      Partial. (Blocks 2.2–2.5 depth, not 2.1.) **Decided 2026-09-23:
+      USB power meter available** — the matrix proceeds at full depth
+      (2.2–2.5 live).
+- [x] **D2 — Cell presence & state.** Is the 11.1 Wh LiPo currently
       installed, and what is its state of charge? Config (b) behavior
       differs materially between "cell present and charged" (expected to
       take over) and "cell absent" (expected to not boot — itself an
-      answer).
-- [ ] **D3 — i2c-tools approval.** Approve `sudo apt-get install -y
+      answer). **Decided 2026-09-23: cell installed, roughly 50 %+ state
+      of charge** — config (b) runs with the cell present; discharge
+      floor per D4.
+- [x] **D3 — i2c-tools approval.** Approve `sudo apt-get install -y
       i2c-tools` and the operator-run read-only reads in WS1 (the agent
       supplies the exact commands; the operator executes and we record
-      verbatim).
-- [ ] **D4 — Discharge depth for config (b).** Agreed stopping point for
+      verbatim). **Decided 2026-09-23: approved — operator runs the
+      install (1.1) and the root reads (1.2–1.3); output recorded
+      verbatim in the WS1 journal note.**
+- [x] **D4 — Discharge depth for config (b).** Agreed stopping point for
       any controlled discharge of the cell (recommend: stop at ~80 %
       remaining if any readout path exists by then, else stop before the
       board's brownout and recharge immediately). Record the decision in
-      the journal with the date.
+      the journal with the date. **Decided 2026-09-23: stop at ~80 %
+      remaining (the safe default), immediate recharge to full; the HAT
+      microUSB feed waits at hand before the SBC-USB-C feed is relied
+      on in config (b).**
 
 ## WS0 — Re-baseline and evidence assembly
 
