@@ -37,6 +37,20 @@ circuit and the SBC's [AXP8191 PMIC](pmic-axp8191.md) has not been traced.
   identified. The current Linux power-supply nodes provide no battery
   telemetry (see [battery.md](battery.md)); a PMIC driver change will only
   help if the relevant HAT signals reach that PMIC.
+- **WS1 census (2026-09-23, detect-only I2C sweep):** the HAT's eight-pin
+  power IC is **not I2C-visible to the SBC at all.** All seven instantiated
+  adapters (`i2c-9 11 12 13 14 15 20` — DT enumerates 16 `twi@` nodes but
+  only these instantiate) were swept with `i2cdetect -y`: the only
+  unclaimed raw responder found anywhere is `0x30` on **`i2c-20`**, which is
+  the **HDMI controller's CEC/DDC bus** (`5520000.hdmi0`) — not a
+  power-path bus, recorded and left alone per the detect-only rule. Every
+  other responding address is a known, kernel-claimed node (`axp8191`/
+  `axp20x-i2c` @ `13-0036`, unclaimed-but-wire-dead `13-0034`, `fusb302` @
+  `14-0022`, unbound `gt9271` @ `12-0014`, unbound `hym8563` @ `15-0051`).
+  Consequence: **the HAT's charge/source-selection logic is not exposed on
+  the SBC's I2C fabric** — its IC either has no I2C side or its I2C lines
+  are not on any of these buses — so the only I2C-visible power device on
+  the SBC is the AXP8191 itself.
 
 ## How we know
 
@@ -60,6 +74,20 @@ circuit and the SBC's [AXP8191 PMIC](pmic-axp8191.md) has not been traced.
 - No journal entry documents a "both plugged in" or "SBC-USB-C-only" test
   yet — that's the point of this row existing as **Not started** rather than
   **Done** with caveats.
+- WS1 detect sweep (2026-09-23, operator under `sudo`; deck on HAT-microUSB
+  feed; `i2c-tools` per plan decision D3; script `tools/i2c_power_probe.sh`):
+  - per-bus sysfs claimer list (`/sys/bus/i2c/devices/*`) + `i2cdetect -y`
+    raw grids on all seven instantiated adapters (completeness proven
+    against the DTS — 16 `twi@` nodes, 7 instantiated);
+  - the only unclaimed raw responder on any bus: `0x30` on `i2c-20` = the
+    HDMI CEC/DDC bus (out of this record's scope, left alone);
+  - caveat recorded in the journal: the raw `i2cdetect` grids mangled in
+    paste and under-marked bound devices, so the sysfs claimer list and the
+    targeted chip-ID reads (EBUSY `0x36` / NAK `0x34`, see
+    [pmic-axp8191.md](pmic-axp8191.md)) are the trustworthy evidence; the
+    grids are used only to catch *new* responders;
+  - verbatim log: `/tmp/ws1_i2c_probe2.log` on the board (2026-09-23 12:00);
+    journal [2026-09-23-power-path-ws1-ic-identification.md](../../journal/2026-09-23-power-path-ws1-ic-identification.md).
 
 ## What it portends
 
@@ -68,8 +96,14 @@ circuit and the SBC's [AXP8191 PMIC](pmic-axp8191.md) has not been traced.
   USB-C only, (c) both — and record, for each: input voltage/current on each
   port, battery current (charging vs. not), and whether the board stays up
   under a nominal game workload. This is the concrete "does the SBC's own
-  port actually work as a power source" answer. A bench meter may be needed
-  if the HAT cell has no software-readable monitor.
+  port actually work as a power source" answer. **WS1 (2026-09-23) settled
+  the tooling question:** the HAT cell has **no** software-readable monitor
+  and no I2C-visible charge IC (see "What we know" census above), so the
+  **bench meter is the primary instrument** for charge behavior — there is
+  no telemetry path the matrix can ride on. The only unproven on-SBC
+  candidate left is the AXP8191's own ADC (if the HAT circuit wires the
+  cell into it — see [battery.md](battery.md)); the meter results will show
+  whether that signal exists before anyone invests in driving it.
 - Until that matrix is run, the safe assumption is **the HAT's microUSB is
   the only verified power source** and any deployment instructions (e.g. "just
   plug in the SBC's USB-C") should not be written on the strength of this

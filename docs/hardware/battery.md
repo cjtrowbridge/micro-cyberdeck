@@ -34,12 +34,24 @@ SBC's [AXP8191](pmic-axp8191.md) remain untraced; see
   class, no hwmon entry for the battery rails.
   The HAT photos do not establish that these SBC ADC inputs are connected to
   the HAT battery; this is a possible route, not a confirmed explanation for
-  the missing battery reading.
-- The companion `axp515` node on the same bus (probed but inert,
-  `waiting_for_supplier=0`) is a possible alternate carrier for a
-  battery-ADC the board simply never bound — but the chip identity on that
-  node is itself unresolved (below). Its relevance to this battery is also
-  unproven.
+  the missing battery reading. **WS1 (2026-09-23) narrows this to the one
+  standing on-SBC candidate:** the full-bus detect sweep found **no
+  I2C-addressable charger/gauge IC on the HAT's power path at all** — the
+  HAT's eight-pin IC is not I2C-visible to the SBC (see
+  [power-path.md](power-path.md)) — so the only way the SBC could sense this
+  cell is via the AXP8191's own ADC *if* the HAT circuit ties the cell (or a
+  divider from it) into one of the AXP's sense inputs. That is unproven and
+  will be tested with meter measurements in WS2 (charge behavior under the
+  three feed configurations), since **no software path to that ADC exists
+  today either way**.
+- **The companion `axp515` node is killed as a battery-ADC path (WS1,
+  2026-09-23).** It enumerates on the same bus (`13-0034`,
+  `waiting_for_supplier=0`) but **nothing answers at `0x34` on the wire** —
+  all seven read-only chip-ID reads NAKed — and **no mainline driver/binding
+  for `x-powers,axp515` exists at all** (zero text hits in `torvalds/linux`).
+  The September-2026 open question ("is axp515 the unbound carrier of a
+  battery ADC?") is answered **No for this board**: not a usable second PMIC
+  (see [pmic-axp8191.md](pmic-axp8191.md)).
 
 ## How we know
 
@@ -56,6 +68,18 @@ SBC's [AXP8191](pmic-axp8191.md) remain untraced; see
   done` (only `tcpm-source-psy-14-0022`, type `USB`, all property files
   empty), plus the PMIC-side regulator/chip probes documented in
   [pmic-axp8191.md](pmic-axp8191.md).
+- WS1 wire evidence (2026-09-23, operator under `sudo` via
+  `tools/i2c_power_probe.sh`; verbatim log `/tmp/ws1_i2c_probe2.log`;
+  journal [2026-09-23-power-path-ws1-ic-identification.md](../../journal/2026-09-23-power-path-ws1-ic-identification.md)):
+  - chip-ID reads on both `i2c-13` addresses: `0x36` → **EBUSY** (the bound
+    `axp20x-i2c` holds it; raw reads by design refused) and `0x34` →
+    **wire NAK** (nothing there) — the axp515 alternate-carrier path above
+    is thus killed on wire evidence, not just driver absence;
+  - detect-only `i2cdetect` sweep of **all seven instantiated adapters**
+    (`9 11 12 13 14 15 20`): no new unclaimed I2C responder anywhere on a
+    header-reachable bus — i.e. **no I2C-visible charger/gauge chip on the
+    HAT power path**, which kills the userspace-raw-I2C readout path (below)
+    as a battery-telemetry route on this deck.
 - The capacity and standby-life math come from the README's spec note under
   the parts list — verbatim: "(11.1 wh battery / 0.8 wh rated standby
   consumption = 13.9 hrs battery life)" — i.e. **11.1 Wh** capacity and a
@@ -73,19 +97,26 @@ SBC's [AXP8191](pmic-axp8191.md) remain untraced; see
   1. **Enable/patch the `axp20x` driver's ADC/fuel-gauge side** (the
      up/downstream kernel driver has battery-ADC support for some AXP
      variants; this only helps if the HAT cell reaches an AXP ADC input).
-  2. **A userspace daemon reading an ADC over raw I2C**, if an accessible
-     chip measures this cell — the `i2c-dev`
-     nodes exist but are **root-only** on this board, and `i2c-tools` is not
-     installed (an `apt` install needs the operator), so this path, like the
-     chip-ID read below, is an operator step or a small privileged
-     userspace helper, not something an unprivileged agent service can do
-     directly.
-- **Open question (needs the operator):** a read-only chip-ID register read
-  (registers `0x00`–`0x06`) on **both** `i2c-13` addresses **0x34**
-  (presented as `axp515`) and **0x36** (presented as `axp2101`-class, the
-  one we know is working) — which physical chip actually carries the
-  battery/charge ADC — helps establish the SBC chips' identities. It does
-  not establish which one, if any, is wired to the HAT battery.
+  2. **A userspace daemon reading an ADC over raw I2C** — **closed by
+     WS1 (2026-09-23):** the full-bus detect sweep found **no
+     I2C-addressable chip measuring this cell** (the HAT's eight-pin IC is
+     not I2C-visible to the SBC; the only unclaimed `i2c-13` address
+     answering is nothing — `0x34` NAKs, `0x36` is the driver-held PMIC).
+     There is no chip to point a raw-I2C reader at, so this path is dead
+     for this deck. (`i2c-tools` was installed per plan decision D3;
+     `i2c-dev` nodes remain root-only — moot now, since no target chip
+     exists on the wire.)
+- **Chip-ID question — answered (WS1, 2026-09-23):** the read-only
+  chip-ID reads (registers `0x00`–`0x06`) on both `i2c-13` addresses were
+  run, with decisive and complementary results: **`0x36` refused with
+  EBUSY** (the bound `axp20x-i2c` grips the live PMIC — identity there
+  stands as the DT-provided `x-powers,axp8191`; we deliberately did not
+  unbind the live driver to force a numeric ID, that being a write-class
+  disturbance of the live rail path) and **`0x34` NAKed on every read**
+  (no silicon there, and no mainline driver could read it anyway). Neither
+  read established a battery-ADC carrier — both on-SBC candidates are
+  accounted for: the AXP8191's own ADC (candidate 1, unproven, WS2 meter
+  test) and the axp515 (killed, see "What we know").
 - **Deliberate decision (2026-09-16 session):** do **not** brute-force
   register writes on a live, powered PMIC "to see what happens" — the
   charge-path MOSFET enable bits are the kind of register that, written by

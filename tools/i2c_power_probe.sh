@@ -73,10 +73,44 @@ done
 
 echo
 echo "## Section 3 — detect-only sweeps (i2cdetect quick-probe; record new responders, do not probe further)"
+echo "--- 3a. known kernel claimers (sysfs; reliable even if the grids mangle) ---"
 for b in 9 11 12 13 14 15 20; do
-  echo "--- i2cdetect -y $b ---"
-  i2cdetect -y "$b" 2>&1 | sed -n '1,12p'
+  echo "i2c-$b:"
+  found=0
+  for d in /sys/bus/i2c/devices/*; do
+    busid=${d##*/}
+    [[ $busid =~ ^i2c- ]] && continue
+    bnum=${busid%%-*}
+    addr=${busid#*-}
+    [[ "$bnum" == "$b" ]] || continue
+    drv=$(readlink "$d/driver" 2>/dev/null)
+    drv=${drv##*/}
+    printf '  0x%s  %-28s %s\n' "$addr" "${drv:-UNBOUND}" "$(cat "$d/name" 2>/dev/null)"
+    found=1
+  done
+  [[ $found == 0 ]] && echo "  (no bound devices)"
 done
+
+echo
+echo "--- 3b. full sweep, ONE LABELED LINE PER RESPONDER (paste-proof) ---"
+echo
+echo
+echo "    legend: -- absent (not printed)  U*/?? = kernel-claimed/unknown (not in this awk,"
+echo "    i2cdetect marks them; they are bound to a driver, see 3a)  0xNN = raw byte"
+echo "    read back from an unbound responder — the finding to note, then leave alone."
+for b in 9 11 12 13 14 15 20; do
+  i2cdetect -y "$b" 2>&1 | awk -v bus="$b" '
+    /^[0-7][0-9a-f]:/ {
+      row = substr($1, 1, 2)
+      for (i = 2; i <= 17 && i <= NF; i++) {
+        v = $i
+        if (v == "--" || v == "??") continue      # absent / unknown-class
+        if (v ~ /^U/) continue                    # kernel-claimed (see 3a)
+        printf "RESPONDER bus %s addr 0x%s%x = %s\n", bus, row, i - 2, v
+      }
+    }'
+done
+echo "(no RESPONDER lines between 3a and the legend-above means: only kernel-claimed devices answered)"
 
 echo
 echo "=== probe complete: $(date '+%F %T') ==="

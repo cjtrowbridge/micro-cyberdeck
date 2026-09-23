@@ -289,18 +289,52 @@ its journal note.
       (sections 2–3 are the reads; section 1 is an unprivileged sysfs
       snapshot), run as
       `sudo bash tools/i2c_power_probe.sh 2>&1 | tee /tmp/ws1_i2c_probe.log`.
-- [ ] 1.2 Operator: read-only chip-ID reads on both live addresses —
+- [x] 1.2 Operator: read-only chip-ID reads on both live addresses —
       `sudo i2cget -y 13 0x34 0x00` … registers `0x00`–`0x06` on `0x34`,
       same on `0x36`. (Safe: read-only; the AXP ID register family sits in
       this range.) Record verbatim; map against known AXP ID values to
       confirm the `axp8191` / `axp515` kernel naming is correct and to
       learn what the inert `0x34` chip actually is.
-- [ ] 1.3 Operator: **detect-only** `sudo i2cdetect -y` on the low bus
+      DONE 2026-09-23 (operator, one sudo, via `tools/i2c_power_probe.sh`):
+      **`0x36` → EBUSY `Device or resource busy`** on all 7 regs (the bound
+      `axp20x-i2c` holds the live chip exclusively — expected for an
+      in-service PMIC; it confirms `0x36` is the live, driver-claimed PMIC
+      and that raw reads are by design refused while it grips). **`0x34` →
+      `Read failed` (wire NAK)** on all 7 regs — the silicon the DT expects
+      at `pmu@34` (`x-powers,axp515`) **does not acknowledge on the wire**
+      (absent / unpowered / not in the deck's power path). The kernel
+      naming is confirmed as the *DT-provided* compatibility, not by a
+      numeric ID (we deliberately did not unbind the live driver to force
+      one — write-class disturbance of the live rail path). **No mainline
+      driver/binding for `x-powers,axp515` exists** (text search of
+      torvalds/linux: zero hits), so it could never bind on any mainline
+      kernel. The September-2026 open question ("axp515 may be a second
+      PMIC with a battery ADC") is **closed: No**. Journal:
+      `2026-09-23-power-path-ws1-ic-identification.md`; verbatim output
+      `/tmp/ws1_i2c_probe2.log`.
+- [x] 1.3 Operator: **detect-only** `sudo i2cdetect -y` on the low bus
       numbers where a HAT-connected IC could plausibly sit (enumerate the
       present i2c adapters first via `ls /dev/i2c-*`, then sweep the board
       buses; we expect `13` and `14` to show only the known nodes — any
       *new* responding address is recorded and left alone, no further
       transaction). Run with the deck on its HAT-microUSB feed.
+      DONE 2026-09-23 (operator, one sudo, same script run): swept **all
+      seven instantiated adapters** — `9 11 12 13 14 15 20` (DT enumerates
+      16 `twi@` nodes; only these 7 instantiate on this DTS — completeness
+      verified). Result: **no new unclaimed responder on any bus reachable
+      through the 40-pin header.** The only raw responder anywhere is `0x30`
+      on **`i2c-20`**, which is the **HDMI controller's CEC/DDC bus**
+      (`5520000.hdmi0`), not a power-path bus — recorded and left alone per
+      the detect-only rule (out of this arc's scope). Unresolved-identity
+      note: `12-0014` gt9271 and `15-0051` hym8563 are **enumerated but
+      unbound** (no driver symlink; collateral, tracked by their own
+      records, not power-path). **Conclusion: the HAT's eight-pin power IC
+      is not I2C-visible to the SBC** — a HAT charge/gauge chip exposing
+      I2C would have appeared as a new address; none did. Caveat recorded:
+      the raw `i2cdetect` grids mangled in-paste and under-mark bound
+      devices, so the sysfs claimer list (3a) + the 1.2 EBUSY/NAK split are
+      the trustworthy evidence; the grids only catch *new* responders.
+      Journal: `2026-09-23-power-path-ws1-ic-identification.md`.
 - [ ] 1.4 Operator: fresh **macro photos** of the eight-pin IC and its
       neighbor components on the HAT underside (bright, raking light for
       the laser marking; a phone close-up at the same angle as the
@@ -320,9 +354,18 @@ its journal note.
       sit downstream of it, or run in parallel with any AXP input —
       stated as the evidence supports, with the visible traces / connector
       evidence cited, and explicitly marked as inference where it is.
-- [ ] 1.7 Journal checkpoint + same-change updates to `pmic-axp8191.md`
+- [x] 1.7 Journal checkpoint + same-change updates to `pmic-axp8191.md`
       (chip-ID readout, any identity correction) and `battery.md`
       (candidate path confirmed/killed by the ID).
+      DONE 2026-09-23: journal `2026-09-23-power-path-ws1-ic-identification.md`
+      written; same-change record updates: `pmic-axp8191.md` (axp515 →
+      wire-dead, no mainline driver, open question closed), `battery.md`
+      (axp515 ADC path killed; I2C-helper path needs an I2C chip — none
+      found; AXP8191-ADC-if-wired remains the only on-SBC candidate, to be
+      tested in WS2), `power-path.md` (no-I2C-visible-HAT-IC census
+      finding), `touch-gt9271.md` + `rtc-hym8563.md` (re-confirmed unbound,
+      mechanism: module registered + compatible matched, so the unbind is a
+      probe/config issue, operator-level `dmesg` is the next evidence).
 
 ## WS2 — Input-source test matrix (operator-led, meter depth per D1)
 
