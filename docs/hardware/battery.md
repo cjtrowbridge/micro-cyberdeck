@@ -17,7 +17,10 @@ SBC's [AXP8191](pmic-axp8191.md) remain untraced; see
   is a **standby-only** figure: it assumes the CPU idles and the GPU/NPU
   never wake; it will not survive contact with real game/agent workloads.
 - **Linux does not see the battery at all today:**
-  - `/sys/class/fuel/` is empty (no battery-backed class device).
+  - `/sys/class/fuel/` is absent entirely (no fuel-gauge driver registered,
+    so the class directory never materialized — re-verified 2026-09-23,
+    WS0 re-probe; journal
+    [2026-09-23-power-path-ws0-baseline.md](../../journal/2026-09-23-power-path-ws0-baseline.md)).
   - `/sys/class/power_supply/` contains only
     `tcpm-source-psy-14-0022` — the fUSB302/TCPM USB-PD source node (see
     [usbc-power.md](usbc-power.md)) — and no `type=Battery` entry at all.

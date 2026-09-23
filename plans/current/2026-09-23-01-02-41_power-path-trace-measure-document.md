@@ -2,8 +2,9 @@
 plan_id: 2026-09-23-01-02-41_power-path-trace-measure-document
 title: Power path — identify the HAT charge IC, run the 3-config input matrix, document
 summary: Close out the power-path row (Not started -> Done, or Partial with explicit bench-tooling gap): (WS0) re-baseline today's observable state (tcpm all-zeros, no fuel node, axp8191 @0x36 + axp515 @0x34 on i2c-13) and re-examine the HAT underside photos; (WS1) operator-led READ-ONLY chip-ID reads on both i2c-13 addresses plus fresh macro photos and a literature pass on the Spotpear reference clone / GamePi HAT to identify the mysterious eight-pin IC + 4R7 inductor charge circuit; (WS2) the proposed 3-config input test matrix - (a) HAT microUSB only, (b) SBC USB-C only, (c) both - at standby and under nominal game workload, recording per-port input V/I, tcpm negotiated values, charge behavior, and stability; (WS3, conditional) minimal battery telemetry via whichever path WS1/WS2 indicate (AXP driver ADC, root userspace I2C helper, or HAT-chip exposure), folded into setup.sh with the docs/setup.md mandate and live apply->verify only if a service is needed; (WS4) same-change updates to all four hardware records (power-path, battery, usbc-power, pmic-axp8191) + README rows + journal. Safety carried over from the 2026-09-16 decision: register access is read-only, no agent-driven PMIC writes, controlled-discharge cap for config (b).
-status: future
+status: current
 created_at: 2026-09-23-01-02-41
+revised: 2026-09-23
 ---
 
 Key: `[ ]` pending task, `[x]` completed task, `[?]` needs validation, `[-]` closed task
@@ -43,6 +44,9 @@ findings (standing rule).
   documentation; `setup.sh` is touched only if WS3 lands a service, in
   which case the standing mandate applies: `docs/setup.md` updated in the
   same change and live `apply -> verify` on this board before commit.
+  *(EXECUTION NOTE 2026-09-23: D3's `i2c-tools` install is still pending
+  operator approval; everything run on the board so far is unprivileged
+  sysfs reads.)*
 - **Cell health is a constraint.** The config-(b) work can discharge the
   11.1 Wh LiPo. Discharge tests are controlled: a plug-in power source is
   at hand before the feed is removed, and the test stops at the agreed
@@ -135,40 +139,127 @@ findings (standing rule).
 Agent-runnable (no sudo), done before any HW interaction; findings recorded
 in a journal note that WS1/WS2 cite.
 
-- [ ] 0.1 Re-probe the power-observable tree and record verbatim:
-      `ls /sys/class/fuel/` (expect empty);
-      `for d in /sys/class/power_supply/*; do echo "$d: $(cat $d/type 2>/dev/null)"; done`
-      (expect only `tcpm-source-psy-14-0022`, type `USB`);
-      `cat /sys/class/power_supply/tcpm-source-psy-14-0022/{in0_input,curr1_input}`
-      (expect 0/empty).
-- [ ] 0.2 Re-probe the PMIC identity (no sudo):
-      `cat /sys/bus/i2c/devices/13-0036/name` (expect `axp8191`),
-      `cat /sys/bus/i2c/devices/13-0034/name` (expect `axp515`),
-      `ls -l /sys/bus/i2c/devices/13-0036/driver` (expect `axp20x-i2c`),
-      `cat /sys/bus/i2c/devices/13-0034/waiting_for_supplier` (expect 0),
-      plus a full `ls /sys/bus/i2c/devices/` to capture every i2c node on the
-      board (so an unexpected HAT-connected node stands out later).
-- [ ] 0.3 Note the ~40 regulator names from `ls /sys/class/regulator/`
-      (unchanged expected; snapshot for the record).
-- [ ] 0.4 Re-examine the three 2026-09-17 HAT underside photos at full
-      resolution (overview `PXL_20260917_070632106.jpg`, lower
-      `PXL_20260917_070641017.jpg`, battery close-up
-      `PXL_20260917_070648424.jpg`): record every legible or partial
-      marking on the eight-pin IC and its neighbors, the inductor value
-      (`4R7` = 4.7 µH expected), and the cell connector. **Do not assign a
-      part number on a partial mark** — record the letters visible, with
-      confidence noted; the ID is made in WS1 from better photos +
-      literature.
-- [ ] 0.5 Literature pass (agent): (a) the Spotpear reference-board wiki
-      and any community schematics/teardowns of that design's power
-      section; (b) GamePi HAT documentation / GitHub for a schematic,
-      pinout, or "connect an external charger" note for the battery
-      connector; (c) candidate charge-controller families matching an
-      8-pin package + external inductor + single-cell LiPo (with charge /
-      boost / status-pin possibilities), ranked against whatever marking
-      fragments 0.4 produced. Produce a short candidate list (≤3) with the
-      evidence for each — this is the working hypothesis WS1 confirms or
-      kills.
+- [x] 0.1 Re-probe the power-observable tree and record verbatim.
+      DONE 2026-09-23 (unprivileged): **`/sys/class/fuel/` does not
+      exist** (not merely empty — `ls` exits 2; the class directory is
+      absent because no driver registered a fuel-gauge device). `power_supply` holds exactly one
+      device, `tcpm-source-psy-14-0022`, `type=USB`. **DRIFT vs. the
+      Sept-2026 record:** the property files are **not** `in0_input` /
+      `curr1_input` (the kernel's `power_supply` naming for this device
+      changed; the old names no longer exist — `cat` exits "No such file"). The current
+      set: `online=0`, `voltage_now=0`, `voltage_max=0`, `voltage_min=0`,
+      `current_now=0`, `current_max=0`, `usb_type="[C] PD PD_PPS"`,
+      plus a **`hwmon0` child** (its own hwmon node, unseen in the earlier
+      record). All values remain zero — the node is the idle
+      kernel stub, as expected for the HAT-powered configuration — but
+      `power-path.md`'s re-probe command must be updated (same change).
+      Journal: `2026-09-23-power-path-ws0-baseline.md`.
+- [x] 0.2 Re-probe the PMIC identity (no sudo).
+      DONE 2026-09-23: `13-0036/name` = `axp8191`, driver symlink →
+      `axp20x-i2c`; `13-0034/name` = `axp515`, `waiting_for_supplier=0` —
+      all as recorded. **Full i2c census (the new baseline):** devices
+      `12-0014` = `gt9271` (touch), `13-0034` = `axp515`, `13-0036` =
+      `axp8191`, `14-0022` = `fusb302`, `15-0051` = `hym8563` (RTC); adapters
+      `i2c-9`, `i2c-11`, `i2c-12`, `i2c-13`, `i2c-14`, `i2c-15`, `i2c-20` —
+      **`i2c-9`, `i2c-11`, `i2c-15`, `i2c-20` carry no bound device** (three
+      of the seven adapters are empty buses; the HAT's charge IC, if it is
+      I2C-addressable, would be a *new* node on one of these — the census
+      is the baseline WS1's detect sweep compares against). `/dev/i2c-*`
+      nodes exist for all seven, `root:i2c crw-rw----` — root-only as
+      recorded; `i2c-tools` **not installed** (`which i2cdetect i2cget` →
+      nothing), D3 still pending.
+- [x] 0.3 Note the ~40 regulator names from `ls /sys/class/regulator/`.
+      DONE 2026-09-23: **43 entries** `regulator.0`–`regulator.42` (the
+      "~40" in `pmic-axp8191.md` is directionally right; the exact count is
+      43 today — the names-per-rail detail is that record's territory, not
+      re-derived here).
+- [x] 0.4 Re-examine the three 2026-09-17 HAT underside photos at full
+      resolution.
+      DONE 2026-09-23 (all three viewed at full resolution). Findings:
+      - **Eight-pin IC** (close-up `PXL_20260917_070648424.jpg`): two-row,
+        ~4-pin-per-side SOIC-8-style package at the bottom-right of the power
+        section, sitting between a `C101`/`C115` capacitor pair and the `4R7`
+        inductor. **No marking is legible in any of the three photos** —
+        zero characters with confidence, so no partial-string candidate and
+        no part number is assigned (per the item's own rule).
+      - **`4R7` inductor** confirmed legible (4.7 µH) in the close-up, as
+        recorded.
+      - **Cell connector**: two-pin header at the right edge, red/black
+        leads, as recorded.
+      - **New observation not in the prior record:** a **16-pin socketed
+        DIP/lock-and-lock-style IC** (white footprint, two white dots, notch
+        on the left side) sits at the top-center of the same power-section
+        photo, directly above the film capacitors (`C115`, `C102`) and a SMD
+        resistor (`5106`); its marking is not legible in these views either,
+        and its package is **socketed** — unlike the eight-pin IC — which
+        either (a) is a dip/lock-and-lock test/programming header or
+        adapter intentionally populated with a SOIC chip, or (b)
+        is the second member of the power circuit (e.g. an I2C-comms
+        bridge between the HAT charger/ADC and the SBC's `i2c-13`).
+      - **Upper-left corner:** the large BGA/QFN IC (the larger chip noted
+        in `docs/hardware/README.md`) sits under/behind the thermal
+        sticker; its marking is not legible in any view — consistent with
+        the README's note that no part number has been assigned.
+      - Conclusion for WS1: **the photos cannot identify the eight-pin IC
+        by marking** — the ID has to come from the fresh macro photos
+        (1.4) and/or the electrical census (1.2/1.3) plus the literature
+        candidate list (0.5). The 16-pin socketed part becomes a second
+        explicit question for 1.6.
+- [x] 0.5 Literature pass (agent).
+      DONE 2026-09-23. Findings:
+      - **(a) Spotpear reference wiki** (the board this HAT clones): full
+        page fetched — the reference design's power section is **not
+        documented at all** on the wiki: no charge controller, no battery
+        connector, no 5V-input section beyond "Operating voltage: 3.3V".
+        The wiki's schematic PDF
+        (`cdn.static.spotpear.com/.../1.54inch%20LCD.PDF`) could not be
+        extracted to text (binary PDF through the fetcher) — **open item
+        for the operator to read locally if they want the base design's
+        power net names**. The reference board's power story is
+        "Pi powers it via the top-connector passthrough" — i.e. **the
+        charge controller + battery connector are exactly the
+        clone-modification CJ notes**, and no public schematic of the
+        modified design exists anywhere reachable.
+      - **(b) The HAT's sourcing**: it's an Amazon link
+        (`amzn.to/4xX0VVJ` affiliate redirect — not resolvable in this
+        session) for an **unbranded/white-label GamePi-clone HAT**;
+        no manufacturer, no model, no schematic, no forum thread
+        reachable without the operator's logged-in session. The project
+        page (cjtrowbridge.com/projects/2026-09-09-micro-cyberdeck/) is
+        consistent with the README: "a clone ... modified with extra
+        features like speakers, aux cord plug, and a battery charge
+        controller." No identification path from the vendor side.
+      - **(c) Candidate charge-controller families** matching an 8-pin
+        SOIC + external 4.7 µH inductor + single-cell LiPo + a possible
+        I2C/pin status path to the SBC, ranked:
+        1. **TP4056-class (DW01+protected or plain) single-cell LiPo
+           linear charger, 8-pin SOIC variant** (e.g. TP4056 in SOIC-8,
+           or the common "TP4056 + DW01" combo board's IC). The 4.7 µH
+           inductor is **NOT** a TP4056 thing (TP4056 is linear, no
+           inductor) — so a pure TP4056 is a **weaker** candidate; flag
+           for elimination in WS1 if the inductor is confirmed charge-circuit.
+        2. **Buck-boost charge/boost controller in SOIC-8 with a 4.7 µH
+           inductor** (e.g. BAX1212, PT4103, or a generic
+           "LTC4015-clone"-class chip found on cheap LiPo battery HATs —
+           the 4.7 µH inductor strongly suggests a **switching** topology,
+           not linear). This is the **leading** candidate: the inductor
+           value and the 8-pin package match the visible
+           components, and a charge+boost combo explains how a single-cell
+           pack can feed a 5V-rail SBC from a 3.3–4.2V cell without a
+           separate regulator.
+        3. **Two-chip solution: SOIC-8 linear/buck charger + a small
+           boost/regulator** for the SBC feed, with the inductor belonging
+           to one of them. Lower confidence in the package count, kept as a
+           fallback if 1.2/1.3's electrical read shows no I2C chip on the
+           HAT side.
+      - **Working hypothesis for WS1**: the eight-pin IC is a switching
+        charge/boost controller (candidate 2), the 4R7 is its power
+        inductor, and the 16-pin socketed part (new finding from 0.4) may
+        be the I2C bridge or a test header. The `i2c-13` addresses
+        `0x34`/`0x36` are **on the SBC side** (the two AXP chips); a HAT
+        charge controller that exposes I2C would be a **new address on one
+        of the seven adapters** — the census in 0.2 is the baseline to
+        diff against. This hypothesis is what 1.2/1.3/1.4 confirm or kill.
 - [ ] 0.6 Journal checkpoint noting the baseline, the photo findings, and
       the WS0.5 candidate list; `power-path.md` "How we know" gains the
       re-probe citation if anything drifted (same change).

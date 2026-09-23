@@ -18,10 +18,14 @@ circuit and the SBC's [AXP8191 PMIC](pmic-axp8191.md) has not been traced.
   feeds the SBC remain to be established (see [battery.md](battery.md)).
 - **The SBC's own USB-C port is a separate input**, negotiated by the fUSB302
   over its I2C/TCPM path — but the kernel's power-supply stub for it reports
-  `in0_input=0`, `curr1_input=0`, all-empty properties (see
-  [usbc-power.md](usbc-power.md)), i.e. **the OS is not currently seeing any
-  negotiated power on the SBC's port** in the deck's normal (HAT-powered)
-  configuration.
+  `online=0`, `voltage_now=0`, `current_now=0` — every readable property zero
+  (see [usbc-power.md](usbc-power.md)), i.e. **the OS is not currently seeing
+  any negotiated power on the SBC's port** in the deck's normal (HAT-powered)
+  configuration. The 2026-09-23 re-probe (WS0 of the power-path plan) also
+  found that the fuel-gauge class directory `/sys/class/fuel/` is **absent
+  entirely** (not merely empty) and that the tcpm node now carries a
+  `hwmon0` child — see journal
+  [2026-09-23-power-path-ws0-baseline.md](../../journal/2026-09-23-power-path-ws0-baseline.md).
 - **The interaction between the two inputs is untested** — specifically:
   - What happens when *both* the HAT's microUSB and the SBC's USB-C are
     plugged in at the same time (which wins? do they fight? does the PMIC
@@ -45,10 +49,13 @@ circuit and the SBC's [AXP8191 PMIC](pmic-axp8191.md) has not been traced.
 - The "powered from the HAT microUSB" fact is observed directly (the cable
   that keeps the deck running is the HAT's, not the SBC's) — this is
   configuration-as-observed, not something a `setup.sh` verify row checks.
-- The SBC-side USB-C all-zero reading: re-probe `cat
-  /sys/class/hwmon/hwmon*/in*` and `cat
-  /sys/class/power_supply/tcpm-source-psy-14-0022/type` (see
-  [usbc-power.md](usbc-power.md) for the exact node).
+- The SBC-side USB-C all-zero reading: re-probe
+  `cat /sys/class/power_supply/tcpm-source-psy-14-0022/{type,online,voltage_now,current_now}`
+  (expect `USB`, `0`, `0`, `0` in the HAT-powered config) — the older
+  `in0_input`/`curr1_input` names no longer exist on this kernel (property
+  naming changed; verified 2026-09-23, WS0 re-probe, journal
+  `2026-09-23-power-path-ws0-baseline.md`); see
+  [usbc-power.md](usbc-power.md) for the exact node.
 - No journal entry documents a "both plugged in" or "SBC-USB-C-only" test
   yet — that's the point of this row existing as **Not started** rather than
   **Done** with caveats.
