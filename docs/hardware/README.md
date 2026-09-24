@@ -30,19 +30,30 @@ not documented yet (e.g. an expansion idea turning into a real plan, or a newly
 discovered peripheral), create its doc and add the README row in the same
 change.
 
-## HAT underside photos (2026-09-17)
+## HAT underside photos (2026-09-17 and 2026-09-24)
 
+**2026-09-17 set:**
 - [Full underside view](images/PXL_20260917_070632106.jpg)
 - [Lower section, including speaker and headphone jack](images/PXL_20260917_070641017.jpg)
 - [Battery connector and upper power section](images/PXL_20260917_070648424.jpg)
 
-These are original-resolution operator photos. The visible `NS8002` marking
+**2026-09-24 macro set (WS1.4, operator upload) — the eight-pin power IC's
+marking now reads crisply:**
+- [Eight-pin IC + `4R7` inductor + `NS8002` neighbor (decisive)](images/PXL_20260924_035455686.jpg)
+- [Angled overview (16-pin part, speaker, fan, battery JST)](images/PXL_20260924_035505977.jpg)
+- plus `PXL_20260924_035513411.jpg`, `PXL_20260924_035521781.jpg`,
+  `PXL_20260924_035531972.jpg`, `PXL_20260924_035538807.jpg`
+
+These are original-resolution operator photos. The `NS8002` marking
 identifies the speaker amplifier (see [speaker-hat-amp.md](speaker-hat-amp.md)).
-The marking on the eight-pin IC next to the `4R7` inductor is still uncertain;
-its role and connection to the SBC PMIC are open (see
+**Updated 2026-09-24 (WS1.5):** the eight-pin IC next to the `4R7` inductor
+now reads **`9813` / `2512`** (date code week 12 / 2025) — a **switching
+buck-boost charge controller, SOP-8**, likely a SY89813-class part
+(datasheet-unconfirmed), and **not I2C-visible** to the SBC; its exact
+part number and the trace to the SBC PMIC remain open (see
 [battery.md](battery.md) and [power-path.md](power-path.md)). The larger IC
-at the opposite corner is visible but its marking is not reliably legible in
-these views, so no part number has been assigned.
+at the opposite corner is visible but its marking is still not reliably
+legible, so no part number has been assigned.
 
 ## Index (On the deck)
 
@@ -56,8 +67,8 @@ these views, so no part number has been assigned.
 | Headphone jack | [headphone-jack.md](headphone-jack.md) | Partial |
 | Membrane key buttons (13) | [membrane-buttons.md](membrane-buttons.md) | In progress |
 | Power button (PMIC key) | [power-button.md](power-button.md) | Done |
-| Battery (11.1 Wh LiPo) | [battery.md](battery.md) | Not started |
-| Power path (USB-C / HAT microUSB / battery) | [power-path.md](power-path.md) | Not started |
+| Battery (11.1 Wh LiPo) | [battery.md](battery.md) | Partial |
+| Power path (USB-C / HAT microUSB / battery) | [power-path.md](power-path.md) | Partial |
 | PMIC (AXP8191 rails) | [pmic-axp8191.md](pmic-axp8191.md) | Partial |
 | SoC temperature (CPU/DDR/GPU/NPU) | [soc-thermal.md](soc-thermal.md) | Done |
 | Fan | [fan.md](fan.md) | Partial |

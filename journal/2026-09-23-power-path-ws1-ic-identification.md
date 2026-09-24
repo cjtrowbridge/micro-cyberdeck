@@ -60,6 +60,53 @@ log. The axp8191 and fusb302 bullets are pure reaffirmations.
 - **`13-0036` axp8191** bound to `axp20x-i2c`; its child platform nodes include `axp2101-pek.0` (the PSK power key → `/sys/class/input/event0`) and `axp8191-temp-ctrl.0` (temp-ctrl enumerated but no hwmon/temp exposed, as `pmic-axp8191.md` records).
 - **`14-0022` fusb302** bound to `typec_fusb302`; its `power_supply` node is the idle `tcpm-source-psy-14-0022` (all zeros — HAT-powered config, as `usbc-power.md` records).
 
+## WS1.4 / WS1.5 — macro photos and ID synthesis (2026-09-24)
+
+**WS1.4 (photos):** the operator uploaded a fresh macro set (6 photos) to
+`docs/hardware/images/`, keeping the 09-17 set as-is. The decisive frame is
+`PXL_20260924_035455686.jpg`; `PXL_20260924_035505977.jpg` is the angled
+overview. This **supersedes** the 09-17 note that the marking was "not
+reliable enough."
+
+**Reading (from the 09-24 close-up):**
+- The eight-pin power IC's laser marking reads **crisply: `9813` (line 1)
+  / `2512` (line 2)**. Line 1 is the **part-ID** line; line 2 is a **date
+  code** — week **12** of **2025**.
+- Adjacent: a **`4R7` (4.7 µH) inductor** and a `W2A1` Schottky-class
+  diode → a **switching** power topology (a linear TP4056-class charger has
+  no inductor, so **WS0.5 candidate 1 is eliminated**).
+- **New observation:** a *second, separate* IC marked **`NS8002` / `216Y1`**
+  sits just above the power IC in both 09-24 frames. It is **not** the
+  power target and is not yet analyzed; recorded here so it is not lost and
+  so it is not later mistaken for the charge controller.
+- Also in the angled frame: the 16-pin socketed part, the small speaker,
+  the black cooling fan, and the battery JST connector.
+
+**WS1.5 (ID synthesis) — outcome (ii): family ID, leading candidate,
+datasheet-unconfirmed.** Matching the 1.2/1.3 electrical evidence (no I2C
+responder → a non-I2C interface) + the 1.4 marking + package + inductor
+against the WS0.5 candidate list:
+- **WS0.5 candidate 2 is confirmed as the class:** a **switching
+  buck-boost charge/boost controller, SOP-8, single-cell** (a 3.0–4.2 V
+  cell can feed a 5 V-rail SBC via a 4.7 µH switching stage).
+- **Leading candidate: `SY89813`-class (Silex)** — the `9813` marking fits
+  a last-4-digits part-ID convention, SOP-8, ~1 A charge + 2 A boost, and a
+  **non-I2C** interface (all consistent with the evidence).
+- **NOT confirmed against a datasheet** (evidence-first: recorded as
+  hypothesis, not fact). Search log: silex-semi.com failed to extract
+  (twice); DigiKey PMIC filter returned **HTTP 403**; LCSC page yielded no
+  usable extract; `github_text_search` over GamePi/OrangePi/Allwinner
+  scopes returned no `SY89813`/`89813`/`9813` hits.
+- **Load-bearing conclusion (high confidence):** the HAT's cell is managed
+  by a **switching buck-boost charge controller with no I2C side** — hence
+  no software telemetry path and no SBC-I2C-visible charger (matches the
+  WS1.3 empty diff). The *specific* part number is a hypothesis.
+- **Same-change record updates:** `power-path.md` (marking + topology +
+  unconfirmed-candidate + NS8002 + search log), `battery.md` (TP4056
+  killed, switching class confirmed, "first establish the path" updated),
+  `pmic-axp8191.md` (cross-ref: non-I2C controller is consistent with the
+  WS1.3 no-responder wire finding).
+
 ## Forward pointers (what WS1.2/1.3 change downstream)
 
 - **WS1.5 (ID synthesis) — I2C branch resolved, NEGATIVE.** IC identity cannot come from I2C (no I2C HAT IC). It now rests entirely on the **1.4 macro photos (laser marking)** plus the **1.6 topology/traces**. WS0.5's candidate ranking stands, with the I2C-bridge sub-option for the 16-pin socketed part weakened (nothing on the wire to bridge to).

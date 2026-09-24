@@ -64,6 +64,15 @@ its connection to these SBC PMICs is not established.
   (2026-09-17) show a separate eight-pin IC and `4R7` inductor on the HAT.
   No marking or visible trace in these images ties this circuit to either
   SBC I2C address.
+- **WS1.5 corroboration (2026-09-24):** the 09-24 macro
+  ([PXL_20260924_035455686.jpg](images/PXL_20260924_035455686.jpg)) reads
+  the HAT eight-pin IC's marking (`9813`/`2512`) with the `4R7` inductor —
+  a **non-I2C, switching charge/boost controller** (see
+  [power-path.md](power-path.md)). That is *consistent* with WS1.3's wire
+  finding (no HAT responder on any SBC bus): a charge controller with no
+  I2C side cannot appear on the SBC's I2C fabric. It does **not** imply the
+  HAT cell reaches the AXP8191's ADC — that wiring question remains
+  WS1.6/WS2 (see [battery.md](battery.md)).
 
 - Live probes (September 2026 session, no sudo for any of these — the
   sysfs attributes are world-readable):

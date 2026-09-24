@@ -1,6 +1,8 @@
 # Battery (11.1 Wh LiPo)
 
-> Status: **Not started** (mirrors the README table)
+> Status: **Partial** (mirrors the README table) — charge-circuit class +
+> topology established (WS1.5, switching buck-boost, TP4056 killed);
+> telemetry + trace still open
 
 ## What it is
 
@@ -12,6 +14,24 @@ SBC's [AXP8191](pmic-axp8191.md) remain untraced; see
 ## What we know
 
 - **Capacity:** 11.1 Wh (board/HAT specification).
+- **The charge circuit is a switching buck-boost controller, not a linear
+  charger (WS1.5, 2026-09-24).** The 2026-09-24 macro
+  ([close-up](images/PXL_20260924_035455686.jpg)) reads the eight-pin HAT
+  IC's marking crisply — **`9813` / `2512`** (`2512` = date code, week 12
+  of 2025) — with an adjacent **`4R7` (4.7 µH) inductor** and a `W2A1`
+  diode. The 4.7 µH inductor is the decisive fact: a **TP4056-class linear
+  charger has no inductor**, so WS0.5's **candidate 1 is eliminated**; the
+  evidence fits **candidate 2 — a switching buck-boost charge/boost
+  controller in SOP-8** (a single cell (3.0–4.2 V) can feed a 5 V-rail SBC
+  from a 4.7 µH switching stage). This is **consistent with a
+  SY89813-class (Silex) buck-boost charger** (the `9813` last-4-digits
+  marking, SOP-8, non-I2C interface) but **that part number is not
+  confirmed against a datasheet** (vendor/distributor pages were
+  unreachable in-session) — see [power-path.md](power-path.md) for the full
+  marking + search log. Topologically this also means the HAT likely
+  **boosts the cell to 5 V to feed the SBC** (matching the "Pi powers it
+  via the top-connector passthrough" note in the plan), not just charges
+  it linearly.
 - **Theoretical standby life:** ~13.9–14 h, derived from the deck's measured
   **~0.8 Wh** standby power draw — i.e. `11.1 Wh / 0.8 Wh/h ≈ 13.9 h`. This
   is a **standby-only** figure: it assumes the CPU idles and the GPU/NPU
@@ -58,10 +78,16 @@ SBC's [AXP8191](pmic-axp8191.md) remain untraced; see
 - [HAT underside overview](images/PXL_20260917_070632106.jpg) and
   [battery connector close-up](images/PXL_20260917_070648424.jpg)
   (2026-09-17): the cell's red/black leads enter a two-pin HAT connector.
-  An eight-pin IC and `4R7` inductor sit nearby. The IC marking is not
-  reliable enough to identify its part number; these photos do not prove
-  whether it charges, boosts, or measures the cell, nor whether the SBC PMIC
-  can sense it.
+  An eight-pin IC and `4R7` inductor sit nearby. (The 09-17 set could not
+  read the marking reliably.)
+- **2026-09-24 macro set (WS1.4/1.5):**
+  [PXL_20260924_035455686.jpg](images/PXL_20260924_035455686.jpg) reads the
+  eight-pin IC's marking crisply — **`9813` / `2512`** — with the adjacent
+  `4R7` inductor and the `W2A1` diode, establishing the **switching**
+  (buck-boost) topology that eliminates the TP4056-linear candidate above.
+  The 09-17 "marking not reliable enough" note is superseded; the remaining
+  uncertainty is the *specific* part number (SY89813-class, unconfirmed
+  against a datasheet) — see [power-path.md](power-path.md).
 
 - Live probe (September 2026 session, no sudo): `ls /sys/class/fuel/` (empty),
   `for d in /sys/class/power_supply/*; do echo "$d: $(cat $d/type 2>/dev/null)";
@@ -91,6 +117,11 @@ SBC's [AXP8191](pmic-axp8191.md) remain untraced; see
 - **First establish the electrical path:** identify the HAT's eight-pin
   power IC and trace or measure its battery and USB connections. An AXP chip
   ID read on the SBC cannot by itself show that the SBC measures this cell.
+  **Partly done (WS1.5, 2026-09-24):** the IC's marking is now read
+  (`9813`/`2512`) and its topology is established as a **switching
+  buck-boost** (4.7 µH inductor) — but the trace of its battery/USB nets
+  and the SBC-side relationship (WS1.6) is still open, and the specific part
+  number is datasheet-unverified (see "What we know").
 
 - **Battery visibility is the gate on real battery work.** Two possible
   paths to a voltage/charge readout, conditional on tracing the HAT cell:

@@ -1,6 +1,8 @@
 # Power path (USB-C / HAT microUSB / battery)
 
-> Status: **Not started** (mirrors the README table)
+> Status: **Partial** (mirrors the README table) — HAT power IC
+> marking-confirmed + topology established (WS1.5, switching buck-boost);
+> input-source matrix (WS2) + relationship trace (WS1.6) still open
 
 ## What it is
 
@@ -16,6 +18,26 @@ circuit and the SBC's [AXP8191 PMIC](pmic-axp8191.md) has not been traced.
   microUSB** port. The HAT carries a separate eight-pin IC beside the cell
   connector and `4R7` inductor. Which IC controls charging and which node
   feeds the SBC remain to be established (see [battery.md](battery.md)).
+- **The HAT's eight-pin power IC — marking-confirmed, datasheet-unconfirmed
+  (WS1.5, 2026-09-24):** the 2026-09-24 macro set
+  ([close-up](images/PXL_20260924_035455686.jpg)) reads the laser marking
+  crisply — **line 1 `9813`, line 2 `2512`** (line 2 is a **date code**:
+  week **12** of **2025**). It is an **SOP-8** part with an adjacent
+  **`4R7` (4.7 µH) inductor** and a `W2A1` Schottky-class diode — a
+  **switching** power topology, not a linear charger (a TP4056-class linear
+  charger has no inductor; the 4.7 µH rules it out, see
+  [battery.md](battery.md)). A *second, separate* IC sits just above it
+  marked **`NS8002` / `216Y1`** — observed, **not** the power target, and
+  not yet analyzed. The `9813` marking is **consistent with a
+  SY89813-class (Silex) single-cell buck-boost charge/boost controller**
+  (the last-4-digits marking convention, SOP-8, 1 A charge + 2 A boost, and
+  a **non-I2C** interface — which matches WS1.3's finding that this IC is
+  **not I2C-visible to the SBC**). **Identity is NOT confirmed against a
+  datasheet**: the vendor (silex-semi.com) and distributor (DigiKey 403)
+  pages were unreachable/JS-walled in this session. Recorded per the
+  evidence-first mandate as *marking-confirmed, family-plausible,
+  datasheet-unverified* — the topology (switching charge/boost) is the
+  load-bearing conclusion; the specific part number is a hypothesis.
 - **The SBC's own USB-C port is a separate input**, negotiated by the fUSB302
   over its I2C/TCPM path — but the kernel's power-supply stub for it reports
   `online=0`, `voltage_now=0`, `current_now=0` — every readable property zero
@@ -59,6 +81,23 @@ circuit and the SBC's [AXP8191 PMIC](pmic-axp8191.md) has not been traced.
   (2026-09-17) show the HAT's microUSB input, battery connector, eight-pin
   IC and inductor. They do not show the internal nets or source-selection
   behavior.
+- **2026-09-24 macro set (WS1.4, uploaded by the operator):** six new
+  close-ups in `images/` — the decisive one is
+  [PXL_20260924_035455686.jpg](images/PXL_20260924_035455686.jpg), which
+  reads the eight-pin IC's laser marking crisply (`9813` / `2512`), shows
+  the adjacent `4R7` inductor and the `NS8002`/`216Y1` neighbor IC;
+  [PXL_20260924_035505977.jpg](images/PXL_20260924_035505977.jpg) gives the
+  angled overview (16-pin socketed part, speaker, fan, battery JST
+  connector). This supersedes the 09-17 set's "marking not reliable enough"
+  note.
+- **WS1.5 ID search log (2026-09-24, agent):** the `9813` marking + SOP-8 +
+  4.7 µH inductor + non-I2C + single-cell context was matched against
+  charge-controller families. `SY89813` (Silex) is the leading candidate
+  (last-4-digits marking convention, SOP-8, buck-boost charge controller).
+  **Unconfirmed**: silex-semi.com failed to extract twice; DigiKey PMIC
+  search returned HTTP 403; the LCSC/GitHub (GamePi/OrangePi/Allwinner
+  scopes) text searches returned no `SY89813`/`89813`/`9813` hits. The
+  honest record state is therefore *family-plausible, datasheet-unverified*.
 
 - The "powered from the HAT microUSB" fact is observed directly (the cable
   that keeps the deck running is the HAT's, not the SBC's) — this is

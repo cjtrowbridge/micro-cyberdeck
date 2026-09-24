@@ -335,13 +335,21 @@ its journal note.
       devices, so the sysfs claimer list (3a) + the 1.2 EBUSY/NAK split are
       the trustworthy evidence; the grids only catch *new* responders.
       Journal: `2026-09-23-power-path-ws1-ic-identification.md`.
-- [ ] 1.4 Operator: fresh **macro photos** of the eight-pin IC and its
+- [x] 1.4 Operator: fresh **macro photos** of the eight-pin IC and its
       neighbor components on the HAT underside (bright, raking light for
       the laser marking; a phone close-up at the same angle as the
       existing set). The existing 2026-09-17 set stays as-is; new photos
       are added to `docs/hardware/images/` with dates and cited in the
       records.
-- [ ] 1.5 ID synthesis (agent): match the 1.2/1.3 electrical IDs and the
+      DONE 2026-09-24 (operator upload, 6 photos): the 09-17 set is kept;
+      new set added to `docs/hardware/images/` — the decisive close-up
+      `PXL_20260924_035455686.jpg` reads the eight-pin IC's laser marking
+      **crisply: `9813` (line 1) / `2512` (line 2)**;
+      `PXL_20260924_035505977.jpg` is the angled overview. New finding: a
+      **second, separate IC** marked `NS8002` / `216Y1` sits just above the
+      power IC (observed, not the power target, not yet analyzed). Cited in
+      `power-path.md`, `battery.md`, `pmic-axp8191.md` (same change).
+- [x] 1.5 ID synthesis (agent): match the 1.2/1.3 electrical IDs and the
       1.4 marking against the WS0.5 candidate list. Outcome is one of:
       (i) **confident ID** (marking + datasheet + electrical behavior align)
       → record part number, package, and the datasheet's charge topology;
@@ -349,6 +357,25 @@ its journal note.
       variant uncertain) → record the family and the shared topology
       assumptions; (iii) **unidentified** → record the evidence and the
       elimination steps; WS2 then leans harder on bench behavior.
+      DONE 2026-09-24 — **outcome (ii), family ID with a leading candidate,
+      datasheet-unconfirmed.** Confirmed facts (photo evidence): SOP-8,
+      marking `9813`/`2512` (`2512` = date code week 12 / 2025), adjacent
+      `4R7` (4.7 µH) inductor + `W2A1` diode → **switching buck-boost**
+      topology (rules out WS0.5 candidate 1, the TP4056-class linear
+      charger, which has no inductor). **WS0.5 candidate 2 confirmed as
+      the class** (switching charge/boost controller, SOP-8, single-cell);
+      **leading candidate `SY89813`-class (Silex)** — last-4-digits marking
+      convention, SOP-8, 1 A charge + 2 A boost, **non-I2C** interface
+      (consistent with WS1.3: the IC is not I2C-visible to the SBC).
+      **Not confirmed against a datasheet**: silex-semi.com failed to
+      extract (twice), DigiKey PMIC search HTTP 403, LCSC/GitHub
+      (GamePi/OrangePi/Allwinner scopes) text searches returned no
+      `SY89813`/`89813`/`9813` hits. Recorded per the evidence-first
+      mandate as *marking-confirmed, family-plausible, datasheet-unverified*
+      in `power-path.md` + `battery.md` (same change). Topology (switching
+      charge/boost) is the load-bearing conclusion; the part number is a
+      hypothesis. WS2 leans on bench behavior for the charge/feed
+      relationship (1.6).
 - [ ] 1.6 Determine the relationship question: does the HAT charge circuit
       feed the SBC's VBUS net (via the "powers the pi from the top" path),
       sit downstream of it, or run in parallel with any AXP input —
