@@ -3,69 +3,116 @@
 **What happened.** The operator reported the device "suddenly rebooted" while the
 G1 thread sweep was mid-run: `whisper-server` (medium, foreground) had just
 completed a 1 s sine decode at `t=8` (≈ 51 s, 51× real-time) after the `t=4`
-re-run (55 s), with Ollama's `qwen3.5:4b` pinned resident, x11vnc serving an
-active client, and memory at 8.2 Gi used / 300 Mi free (active reclaim).
-Post-reboot state was clean: repo intact, whisper-server binary intact
-(build dir untracked in the submodule, weights `~/voice-agent/ggml-medium.bin`
-1.5 G intact), Ollama auto-started, cyberdeck-api back on 8080. Nothing of
-ours was damaged; the unpinned-forever Ollama pin and the whisper server (not
-yet a unit) had to be re-established.
+re-run (55 s), with Ollama's `qwen3.5:4b` pinned resident, x11vnc connected,
+memory at 8.2 Gi used / 300 Mi free (active reclaim). Corrected timeline
+(after the RTC story — see below): the **previous boot started real ≈ 21:36**
+(stamped 21:00:32 — its clock ran ~35 min slow; the RTC is unbound, see
+[docs/hardware/rtc-hym8563.md](../docs/hardware/rtc-hym8563.md)) and carried the
+entire G1 session (apt batch, CMake build, weights, Ollama pin, t=2/4/8 sweep)
+for ≈ 2 hours, **dying at real ≈ 23:35:35 — the exact moment the t=8 decode
+finished**. Post-reboot state was clean: repo intact, binary intact, weights
+1.5 G intact, Ollama auto-started, cyberdeck-api back on 8080. The Ollama pin
+and the whisper server (not yet a unit then) had to be re-established — done /
+in flight.
 
-## Evidence collected (user-space, cj)
+## Evidence (cj user-space + operator sudo, all 2026-09-23 23:xx)
 
-- **Crash-boot journal is missing.** `journalctl --list-boots` shows boots at
-  09-20 16:04 (`08c5ffbc`), 09-23 20:52 (`201b7706`, **~2 s of records, ends
-  mid-early-boot, no shutdown.target**), 09-23 21:00 (`a23903f8`, **~1 s of
-  records, same shape**), 09-23 23:00 (`1fcf778c` = current). The boot that
-  carried our whole G1 session (build ≈ 23:17–23:24, tests through ≈ 23:41
-  by wall clock) appears nowhere as a separate boot, and the current boot's
-  journal contains **zero whisper lines** and a 23:01–23:35 stamped gap with
-  zero lines — the records of the dead boot (or of itself) did not persist to
-  `/var/log.hdd/journal` (the persistent journal lives on the same eMMC file
-  system, `/dev/mmcblk1p1`).
-- **Current boot's clock jumped ~35 min at +40 s.** Kernel banner stamped
-  23:00:04, `systemd-timesyncd: Initial clock synchronization to 23:35:39`
-  about 40 s later; `uptime` proves kernel start ≈ 23:35:40. The RTC on this
-  board is unreliable — any wall-clock reasoning before NTP sync is suspect.
-- **No crash signatures in any surviving record.** Greps across all readable
-  boots for `oom-kill | killed process | Kernel panic | thermal trip |
-  watchdog | shutdown.target`: nothing fatal. `swapon --show` proves swap
-  **does exist** — `/dev/zram0` 5.8 G (fully unused after reboot); my earlier
-  "no swap" assumption was wrong. Current temps healthy: cpul 57.0 C,
-  cpub 55.9 C, gpu 53.2 C, skin 35.6 C.
-- **Vendor watchdog is live:** `sunxi-wdt 2050000.watchdog: Watchdog enabled
-  (timeout=16 sec, nowayout=0)` on every boot. On sunxi hardware a watchdog
-  expiry forces a full reset and leaves no journal trace — consistent with
-  every observation above, but not provable from user space.
-- **`/var/log/syslog` (615 K, last write 23:41) and `/var/log/kern.log`
-  (349 K) are the complete record and are `adm`/root-only — `tail` as cj was
-  permission-denied. They would settle OOM-vs-power-vs-hang.**
+- **The dead boot's records did not survive — structurally.**
+  `/var/log.hdd/journal/9b5c090a…/` holds exactly **one 2.6 MB segment per
+  booted record** (mtimes 20:52:35, 21:00:33, 23:00:04 — the stamped,
+  clock-stuck times). The image runs a **tmpfs runtime journal with
+  flush-at-boot** (`/run/log/journal`, Armbian ramlog pipeline) plus
+  `journald.conf: SystemMaxUse=20M`: on an unclean power loss the whole
+  boot's in-RAM records die, and only a bootstrap sliver flushes at the next
+  boot. The session boot's persisted segment holds **one stamped second**
+  (21:00:32→21:00:33); its ~2 h of session records (build, pin, sweeps)
+  died with it — it is not "unrecovered", it is unrecoverable here.
+- **rsyslog text logs are boot-bound** (operator `sudo grep`): `/var/log/kern.log`
+  contains only two kernel boots — the 09-20 16:04 flash and the current
+  one — with **zero `oom-kill`, `killed process`, `Kernel panic`, or watchdog
+  reset lines** in either, only the two `sunxi-wdt … Watchdog enabled
+  (timeout=16 sec, nowayout=0)` lines. `syslog`/`kern.log` are truncated at
+  every boot; `armbian-hardware-monitor.log` likewise (its last lines are
+  the current boot's 23:00-stamped boot health table).
+- **Net: the death-boundary evidence for this reboot does not exist on the
+  deck.** Dirty power = no record, given tmpfs journal + rsyslog-at-boot +
+  `SystemMaxUse=20M` rotation on this vendor image.
+- **The current boot's clock jumped ~35 min at NTP:** banner 23:00:04,
+  `systemd-timesyncd … Initial clock synchronization to 23:35:39` ~40 s
+  later, `uptime` proving kernel start ≈ 23:35:35. With the RTC unbound and
+  non-functional ([docs/hardware/rtc-hym8563.md](../docs/hardware/rtc-hym8563.md)),
+  all pre-NTP wall-clock reasoning is suspect: the 20:52/21:00-stamped boots
+  are real **≈ 21:28 / ≈ 21:36**.
+- **Boots tonight (stamped → real):** `201b7706` 20:52:34 (≈ 21:28) — **died
+  ~2 s after start** (journal ends mid-early-userspace: bluetoothd/ntp/cron,
+  no `shutdown.target`); `a23903f8` 21:00:32 (≈ 21:36) — **the G1 session
+  boot; ran ≈ 2 h, died at real ≈ 23:35:35**; `1fcf778c` 23:00:04 (≈ 23:35:35,
+  current — boot_id confirmed via `/proc/sys/kernel/random/boot_id`).
+  Earlier today, the 2-day flash boot (`08c5ffbc`, 09-20 16:04 → stamped
+  09-23 00:15:43) also ended with **no `shutdown.target`** — the **fourth
+  unclean power event in ~23 h**.
+- **A 2-second boot cannot be a watchdog trip:** `sunxi-wdt` (16 s,
+  `nowayout=0`) only starts counting from kernel start; the ≈ 21:28 boot
+  died within 2 s of it. Those events are hard power losses (or an early
+  boot-fail loop) — i.e. **power-side, not software-reset**.
+- **No fatal kernel signatures in the surviving 2-day boot**, which spans the
+  earlier Ollama/heavy work of 09-20→09-23: no OOM-kills, no panics, no
+  thermal trips; post-mortem temps healthy (cpul 57.0 C, cpub 55.9 C,
+  gpu 53.2 C, skin 35.6 C — logged in
+  [docs/hardware/soc-thermal.md](../docs/hardware/soc-thermal.md)); swap
+  **exists** (`/dev/zram0` 5.8 G — my earlier "no swap" assumption was wrong)
+  so an OOM would have had a buffer.
+- **A hard power cut is the *zero-trace* mechanism on this deck:** the power
+  button is the PMIC's PEK input (`axp8191-pek`, `/dev/input/event0`,
+  `KEY_POWER`; [docs/hardware/power-button.md](../docs/hardware/power-button.md))
+  and a PEK long-press makes the AXP8191 **cut power immediately — no journal
+  line, ever**. The membrane-buttons record holds an unconfirmed hypothesis
+  that keypad pin 5 (PB2) is fused with this PEK — an accidental long-press
+  on the deck would hard-cut it. The deck had an active x11vnc client
+  (192.168.1.134, key events visible) on both the dying and the next boot.
 
-## Hypotheses (ordered by fit)
+## Hypotheses (reordered after the evidence above)
 
-1. **Watchdog reset after a kernel/firmware hang** during the heaviest load
-   of the session (t=8 decode + Ollama 3.65 G resident + active reclaim at
-   300 Mi free + x11vnc client). 16 s `nowayout` vendor wdt; zero journal
-   trace expected.
-2. **Power-path brownout/reset** — the exact live question of the
-   power-path plan (WS0: TCPM all-zeros baseline; WS1: IC identification
-   pending). The two earlier hard resets tonight (20:52, 21:00 — each
-   journaled only to early boot, no shutdown record) make a repeat
-   instability rather than a one-off.
-3. **OOM then something worse** — now the weakest fit: zram swap existed and
-   was presumably absorbing pressure; no kill records at all.
+1. **Hard power loss** — external supply/cable/HAT path, or a
+   PEK/pin-5 long-press cutting power via the PMIC. It fits every
+   observation: all four unclean events leave exactly the no-record journal
+   state of a power loss; the 2 s boot *rules out* a watchdog for that event;
+   the kernel is 2-day-proven stable under similar load (zero fatal
+   signatures in the surviving record); and the power path is a known open
+   question (parallel session's power-path plan; WS0 tcpm all-zeros
+   baseline). The t=8 decode simply happened to end at the moment of the cut.
+2. **Watchdog reset after a kernel hang** — possible, and also zero-trace,
+   but the 2 s micro-boot does not fit it, and the board already survived
+   2 days of this image under comparable workload without a single hang
+   signature. The 16 s `nowayout` timer stays a standing risk for any
+   future hang regardless.
+3. **OOM** — weakest: zram 5.8 G was available, no kill records anywhere,
+   and the OOM-killer terminating a user process would not reboot the SoC.
 
-## Open — needs operator (root) evidence
+## Open — physical-world questions (board evidence is exhausted)
 
-- `grep -inE 'oom|killed process|panic|watchdog|wdt' /var/log/kern.log | tail -30`
-- `grep -inE 'oom|panic|watchdog|reset|tripped' /var/log/syslog | tail -30`
-- `tail -60 /var/log/syslog` at the death boundary (≈ 23:41:28)
-- `ls -l /var/log.hdd/journal/` — which boot files persisted, and whether any
-  was truncated ~23:41
-- Board power state at the moment: on external supply vs battery; any visible
-  brownout on the HAT side (ties into the power-path plan's WS0/WS1)
-- Were the 20:52 / 21:00 hard resets noticed or caused (e.g. a setup.sh
-  reboot-scheduler, power cycle)?
+The sudo probes (operator, 23:xx) ran and found nothing recoverable —
+everything above is the full surviving record. What remains is human-world:
+
+- **Power at real ≈ 23:35:35:** which supply and cable, which outlet,
+  anything else on that feed; did the screen/LED visibly drop at the moment
+  (the operator's "suddenly rebooted" is the observation of record)?
+- **Was the deck held or touched** at the moment of death — or during the
+  ≈ 21:28 / ≈ 21:36 power events? A cheap repro for the operator, **after any
+  in-flight parallel work and before the heavy-load sweep re-run**:
+  long-press the power button (and pin 5) for a few seconds and confirm
+  whether the board hard-cuts. If it does, every long decode from now on is
+  exposed to accidental press-cut — document it in
+  [docs/hardware/power-button.md](../docs/hardware/power-button.md) and
+  treat pin 5 exactly as the power key.
+- **What ran between real ≈ 21:00–23:35 — and did anything schedule a
+  reboot?** `setup.sh` (the "GamePi: set up the machine" task) or any other
+  reboot-scheduling mechanism? Two boots 8 min apart smells like a
+  provisioning pass + reboot policy, or a flaky supply. (Operator recollection
+  here is worth more than any log at this point.)
+- The "4 unclean power events in ~23 h" statistic belongs in the power-path
+  record when that arc next lands — **coordinate with the parallel session,
+  don't clobber** `docs/hardware/power-path.md` (their live file).
 
 ## Impact on the gate plan
 

@@ -70,29 +70,51 @@ audio.
   root FS **2.5 G free (92 %) → 8.6 G free (71 %)**. `setup.sh` verified
   presence-only (no re-pull risk); `/api/ps` empty before and after.
   Evidence: [journal/2026-09-23-voice-agent-g1a-9b-prune.md](../../journal/2026-09-23-voice-agent-g1a-9b-prune.md).
-- [x] (G1-b) **Vendoring done 2026-09-23 (the no-sudo side); the apt install
-  batch is the one remaining step (operator-run).** `third_party/whisper.cpp`
-  pinned as a submodule at tag `v1.9.4` (`927cfce`); `ebe-boilerplate` cloned
-  to the board's workspace (`e741e1c`, git-ignored — external, not a
-  submodule, per design §9). Outstanding (corrected from the original
-  wording — v1.9.4 builds with **CMake**; its root Makefile wraps
-  `cmake -B build && cmake --build build`):
-  `sudo apt install -y build-essential cmake pkg-config` (+ `libasound2-dev`
-  only if the build errors on `alsa.h`); `make` and `espeak-ng` are already
-  present on the board.
-- [x] (G1-c) **Weights fetched 2026-09-23; build + unit pending the apt
-  batch.** The canonical asset is **`ggml-medium.bin`** (1.48 G; the
-  `ggml-model-whisper-medium-*.bin` name was stale — see journal), fetched to
-  `~/voice-agent/ggml-medium.bin` (path decided: not `/var/lib/` — no sudo
-  touch — and not the repo). Remaining: CMake build of `examples/server`,
-  then a **user systemd unit** (127.0.0.1:8080, `-t 2`, `Restart=always`).
+- [x] (G1-b) **Complete 2026-09-23.** `third_party/whisper.cpp` pinned as a
+  submodule at tag `v1.9.4` (`927cfce`); `ebe-boilerplate` cloned to the
+  board's workspace (`e741e1c`, git-ignored — external, not a submodule, per
+  design §9). The operator ran the toolchain batch
+  (`sudo apt install -y build-essential cmake pkg-config`): cmake 3.31.6,
+  g++ 14.2.0, pkg-config 1.8.1 verified on the board; ALSA dev (1.2.14) was
+  already present so `libasound2-dev` was not needed.
+- [x] (G1-c, partial) **Weights + build done 2026-09-23; the unit install
+  remains the operator step.** `ggml-medium.bin` (1.48 G) at
+  `~/voice-agent/ggml-medium.bin`; **CMake build of `whisper-server`
+  complete** (Release, `-march=native` →
+  `third_party/whisper.cpp/build/bin/whisper-server`, 1.2 M, in-submodule
+  untracked). Two deviations from the design, both evidenced: **port 8086
+  (not 8080** — `:8080` is the root `cyberdeck-api.service`, the
+  setup.sh `api-health` verify target) and a **system unit** with
+  `User=cj` (**not a user unit** — this board has no user session:
+  `loginctl` reports none, no `/run/user/1000`, `DBUS_SESSION_BUS_ADDRESS=
+  disabled:`; `gamepi-xvfb.service` is the precedent). Unit written to
+  `projects/voice-agent/systemd/whisper-server.service`; **operator install
+  owed** (`sudo cp → /etc/systemd/system/ && daemon-reload && enable --now`)
+  + post-boot verify. Foreground functional test passed pre-reboot: UP after
+  ~6 s, `/health` ok, `/inference` decoded a 1 s test WAV.
 - [ ] (G1-d) Ollama residency pin: `keep_alive: -1` requests against the
   existing `ollama` Docker deployment (127.0.0.1:11434) for
-  `qwen3.5:4b`; verify loaded after ≥10 min idle (no eviction)
+  `qwen3.5:4b`; verify loaded after ≥10 min idle (no eviction). Status:
+  mechanism proven (pin `expires_at` year 2319, 3.66 G size in `/api/ps`);
+  **pins are in-process — every container restart/reboot loses them and a
+  re-pin request is required**; the 2026-09-23 23:35 reboot lost the pin
+  and it was re-established. Two more lessons locked in: requests to the
+  thinking-family `qwen3.5` **must carry `"think": false`** (a no-think
+  request spun a 12 m 50 s runaway thinking block that had to be killed via
+  `docker restart ollama`), and the ≥10 min idle check is still owed.
 - [ ] (G1-e) **Exit criterion:** `free -h` with both idle-resident shows
   ≈ 5 GB combined (measured: 3.16 G 4b + ~1.5 G medium + ~0.3 ebe/llvmpipe)
   with ≈ 4 G still available, logged to the journal; whisper `/inference`
-  answers a test WAV; Ollama `/api/ps` shows `qwen3.5:4b` resident
+  answers a test WAV; Ollama `/api/ps` shows `qwen3.5:4b` resident. Status:
+  `/inference` proven (test-WAV decode); both-resident observation 8.2 Gi
+  used / 300 Mi free / 3.4 Gi available (tight; **zram swap 5.8 G exists** —
+  correcting the earlier "no swap" note); the t=2/4/8 thread sweep was
+  **invalidated by the 23:35 unclean reboot** (heaviest-load correlation —
+  the t=8 decode's completion coincides with the cut; numbers: t=2 56 s,
+  t=4 46→55 s, t=8 51 s on a 1 s input = ~50× class, treated as
+  "≈ 50× real-time, thread-count not separable" until a controlled re-run —
+  this blows past the design §5 >2× small-medium fallback trigger)
+  [2026-09-23-g1-reboot-incident.md](../../journal/2026-09-23-g1-reboot-incident.md)
 
 ## G2 — the wire (design §5–7, §8)
 
