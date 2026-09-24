@@ -111,7 +111,7 @@ Because it’s now so easy to run models locally, and because this device has a 
 
 I started out by installing a desktop environment which was a little complicated, and then installing vs code so I could have it work on itself [in the public repo](https://github.com/cjtrowbridge/micro-cyberdeck) so you can see what it’s doing. Also because I want to figure out how to get the development environment to use higher resolutions than the screen natively supports on VNC or USB while still having it be somewhat legible on the screen. 
 
-My plan is to use my [ebe pipeline](https://github.com/cjtrowbridge/ebe-boilerplate) to build an interactive game-engine style interface that plays nice with the buttons and AI tools.
+My plan is to use my [ebe pipeline](https://github.com/cjtrowbridge/ebe-boilerplate) to build an interactive game-engine style interface that plays nice with the buttons and AI tools. The voice half of that has a design of record now: the **voice agent** — a push-to-talk local agent (hold the left bumper → whisper-medium transcribes, resident qwen3.5:4b answers out loud) running in a full-screen Ebitengine app on the 960×960 desktop. Its design and gate plan (this is the item behind the "voice-interactive local agent software" unresolved issue below) live at [projects/voice-agent/](projects/voice-agent/).
 
 Here you can see she has vs code open and she is working on herself. Hopefully she will be able to figure out these unresolved issues without much help from me. 💅
 
@@ -124,6 +124,7 @@ Here you can see she has vs code open and she is working on herself. Hopefully s
 - Getting steam/proton working
 - Building voice-interactive local agent software
   - Integrating with peripherals like Flipper Zero and pwnagotchi
+  - Design of record: [projects/voice-agent/](projects/voice-agent/) (push-to-talk runtime — whisper-medium + qwen3.5:4b resident, left-bumper PTT; gates G0–G3 in its [design](projects/voice-agent/docs/design.md); currently **design only**, no board changes)
 
 ## Setup
 
