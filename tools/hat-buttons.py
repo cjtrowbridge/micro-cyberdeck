@@ -21,9 +21,9 @@ one active-HIGH line.
 PARKED lines — never transitioned in the whole mapping log; all idle LOW,
 which under a grounded probe is also what a *dead contact* (that side of
 the membrane never closes) looks like. Re-test procedure:
-plans/current/2026-09-23-22-21-19_membrane-buttons-userspace-daemon.md,
-task "Parked keys". A confirmed round adds ROWS TO KEYS — nothing else
-changes.
+docs/hardware/membrane-buttons.md ("Parked keys"), backed by the closed
+plan plans/past/2026-09-23-22-21-19_membrane-buttons-userspace-daemon.md.
+A confirmed round adds ROWS TO KEYS — nothing else changes.
     pin 32 -> /dev/gpiochip0 line 97   (PD1, expected: face Y)
     pin 33 -> /dev/gpiochip0 line 99   (PD3, expected: d-pad Right)
     pin 37 -> /dev/gpiochip0 line 100  (PD4, expected: Select)

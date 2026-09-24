@@ -119,6 +119,16 @@ through the real path.
 
 ## How we know
 
+- **The acceptance gate passed live 2026-09-23** (journal entry
+  [2026-09-23-membrane-buttons-userspace-daemon-landed.md](../../journal/2026-09-23-membrane-buttons-userspace-daemon-landed.md),
+  plan
+  [2026-09-23-22-21-19](../../plans/past/2026-09-23-22-21-19_membrane-buttons-userspace-daemon.md)
+  now `past`): `setup.sh --yes` applied daemon + unit with
+  `unit:buttons` PASS, follow-up `--plan` **CONVERGED**, root
+  `--selftest --inject-test` **OK** (9/9 idle levels matched the table, one
+  real `Control_L` injected), and the operator pressed all nine physical keys
+  on the `:1` desktop confirming each landed (d-pad up/down/left, A/B/X, both
+  shoulders, Start) — the membrane→keystroke path proven end-to-end.
 - **The 9-key table and the 3 parked lines are operator evidence, each in
   the live mapping log** `/home/cj/btnmap-run.log` (160 lines, 2026-09-23):
   every mapped key a clean paired press/release; every parked line an
@@ -147,6 +157,8 @@ through the real path.
     `gpiochip352` but **no `gpiochip1`** (that node's base is 352):
     `for d in /sys/class/gpio/gpiochip*/label; do echo "$d: $(cat $d)"; done`
     — expect the pair `2000000.pinctrl` and `7025000.pinctrl`.
+  - Note: `images/PXL_20260924_*.jpg` (the six 2026-09-23 evening photos)
+    belong to the parallel power-path hardware session, not this record.
   - idle levels (with the daemon stopped, or as root): `sudo python3
     /usr/local/bin/hat-buttons.py --selftest` — re-reads every mapped line
     and prints its idle value against the table.
