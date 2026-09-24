@@ -49,6 +49,13 @@ standard `thermal_zone*` / `cooling_device*` kernel interface. These are
   done
   ls /sys/devices/virtual/thermal/
   ```
+- 2026-09-23 (voice-agent G1, post-reboot, board ~idle): all zones well under
+  any trip point — cpul 57.0 C / cpub 55.9 C / gpu 53.2 C / ddr 50.6 C /
+  npu 50.5 C / skin 35.6 C; **zero thermal-trip lines in the surviving
+  journal**. Context: this was measured right after the unclean
+  [reboot incident](../../journal/2026-09-23-g1-reboot-incident.md) during a
+  sustained 8-thread whisper-medium decode — thermal is **not** a suspect for
+  that crash.
 - No `setup.sh` verify row touches these — thermal state is observation, not
   provisioning.
 

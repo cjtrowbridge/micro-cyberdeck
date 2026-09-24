@@ -84,6 +84,14 @@ battery-powered SBC.
 
 ## What it portends
 
+- **Consequence observed live (2026-09-23):** the 23:41 voice-agent reboot
+  incident left forensically incoherent timestamps — the current boot's
+  kernel banner is stamped ~35 min *before* NTP corrected it
+  (`systemd-timesyncd: Initial clock synchronization to 23:35:39`, ~40 s
+  into boot; `uptime` proves kernel start ≈ 23:35:40). Any crash/power
+  forensics on this deck must treat pre-NTP-sync wall-clock ordering as
+  suspect. See
+  [journal](../../journal/2026-09-23-g1-reboot-incident.md).
 - **Becomes relevant the moment the deck starts being used as a
   battery-powered, network-detachable device** (i.e. once any of
   [battery.md](battery.md) / [power-path.md](power-path.md) lands and the

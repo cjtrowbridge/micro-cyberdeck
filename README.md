@@ -125,7 +125,7 @@ Here you can see she has vs code open and she is working on herself. Hopefully s
 - Getting steam/proton working
 - Building voice-interactive local agent software
   - Integrating with peripherals like Flipper Zero and pwnagotchi
-  - Design of record: [projects/voice-agent/](projects/voice-agent/) (push-to-talk runtime — whisper-medium + qwen3.5:4b resident, left-bumper PTT; gates G0–G3 in its [design](projects/voice-agent/docs/design.md); G0 decided — USB mic via OTG, hardware proof pending; **G1 in progress**)
+  - Design of record: [projects/voice-agent/](projects/voice-agent/) (push-to-talk runtime — whisper-medium + qwen3.5:4b resident, left-bumper PTT; gates G0–G3 in its [design](projects/voice-agent/docs/design.md); G0 decided — USB mic via OTG, hardware proof pending; **G1 in progress** — server built and functional, resident-pin proven, an unclean reboot mid-sweep at 2026-09-23 23:41 left the root cause and clean throughput numbers open ([incident journal](journal/2026-09-23-g1-reboot-incident.md)))
 
 ## Setup
 

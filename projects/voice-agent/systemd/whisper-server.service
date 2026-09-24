@@ -1,0 +1,40 @@
+# whisper-server.service — ASR server for the voice agent (gate plan G1-c)
+#
+# SYSTEM unit, not a user unit: this board has no user session (loginctl:
+# "No sessions"; DBUS_SESSION_BUS_ADDRESS=disabled:; no /run/user/1000), so a
+# user unit would never run. Running daemons as user cj is a system-unit
+# convention on this board — gamepi-xvfb.service (User=cj) is the precedent.
+# Supersedes the design doc's "user systemd unit" wording.
+#
+# Port 8086, NOT 8080: 127.0.0.1:8080 is held by cyberdeck-api.service
+# (root; Apache proxies /api/ into it; setup.sh api-health verify curls it).
+# 8086 confirmed free 2026-09-23.
+# Flags: --host/--port/-m/-t (-p is --processors, not port).
+# -t 2: big-medium decode is bandwidth-bound (thread sweep 2026-09-23) and
+# the fan is the lever we do not touch blindly (design §5).
+#
+# Install (operator, root):
+#   sudo cp projects/voice-agent/systemd/whisper-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now whisper-server
+# Verify: ss -tlnp | grep 8086  +  curl -s http://127.0.0.1:8086/health
+# ({"status":"ok"}; model load ~6 s).
+#
+# Weights: ~/voice-agent/ggml-medium.bin (ggml-medium, 1.48 G, 2026-09-23).
+# Post-reboot note: whisper-server is not running yet (pre-unit era); this
+# unit is the re-establishment step — journal/2026-09-23-g1-reboot-incident.md.
+
+[Unit]
+Description=whisper.cpp server (voice agent ASR, loopback 127.0.0.1:8086)
+After=network.target
+
+[Service]
+Type=simple
+User=cj
+Environment=HOME=/home/cj
+ExecStart=/home/cj/Github/micro-cyberdeck/third_party/whisper.cpp/build/bin/whisper-server --host 127.0.0.1 --port 8086 -m /home/cj/voice-agent/ggml-medium.bin -t 2
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
