@@ -28,15 +28,32 @@ bound.
   `status` property → defaults okay), and `CONFIG_TOUCHSCREEN_GOODIX=m`.
   The non-bind is therefore a **probe-time/config issue, not a
   missing-driver or compatible-mismatch issue**.
-- **Boot-log evidence (2026-09-23, operator):** `sudo dmesg |
-  grep -iE 'gt9271|hym8563'` returned **zero lines**. This is **inconclusive
-  for the touch controller**: the `goodix_ts` driver logs as
-  `goodix_ts 12-0014: …` and does **not** embed the chip name `gt9271` in
-  its own messages, so the grep pattern would have missed it. Ring-buffer
-  wraparound (~12.5 h uptime) is a second independent reason boot-time
-  lines may be absent. **Remaining open question:** the exact probe failure
-  — check `grep -iE 'goodix|12-0014' /var/log/kern.log` (world-readable,
-  full boot log on Armbian) to settle it.
+- **Mechanism resolved (2026-09-23, operator boot log `/var/log/kern.log`):**
+  the probe **ran** at boot and **failed** — it is not an un-attempted or
+  deferred bind. Verbatim (2026-09-20T16:04:51 — the flash/setup date;
+  same failure at every boot since; the node is still unbound today):
+  ```
+  Goodix-TS 12-0014: supply AVDD28 not found, using dummy regulator
+  Goodix-TS 12-0014: supply VDDIO not found,using dummy regulator
+  Goodix-TS 12-0014: Error reading 1 bytes from 0x8140: -22   (×2)
+  Goodix-TS 12-0014: I2C communication failure: -22
+  Goodix-TS 12-0014: probe of 12-0014 failed with error -22
+  ```
+  Reading: the IRQ/RST GPIOs were **acquired successfully** (the driver's
+  "Failed to get %s GPIO" error exists in its message set and is **not**
+  in the log); AVDD28/VDDIO fall back to **dummy regulators** (non-fatal —
+  the DT node declares no regulator supplies); but the first data
+  transaction — the **chip version-register read at `0x8140`** (the
+  standard "does the chip answer" probe read) — fails with **-22 (EINVAL)**
+  and the probe aborts with **no retry**. Combined with the WS1 raw
+  `i2cdetect` grid showing **no quick-probe ACK at `0x14` on `i2c-12`**
+  (bus 12 all `--`), the evidence points to **the chip not responding on
+  the wire** — absent, unpowered, held in reset, or the I2C lines not
+  where the DT expects. This is a **hardware/wiring-level issue**, not a
+  driver, compatible, GPIO, or DT-config issue: every OS-side precondition
+  is demonstrably in place. (Note for the record: the earlier zero-hit
+  `dmesg | grep -iE 'gt9271|hym8563'` missed this because the driver logs
+  as **`Goodix-TS`**, a name containing neither grep term.)
 - Goodix controllers need two extra GPIOs (interrupt + reset) wired
   from the host. Which physical header pins the HAT uses for these **is
   not yet mapped** — no schematic has been captured (the DT's GPIO
@@ -68,14 +85,15 @@ bound.
     → node carries `interrupt-parent`, `interrupts`, `irq-gpios`,
     `reset-gpios`, and **no** `status` (defaults okay) — driver present +
     compatible matches + DT-intended → the unbind is a **probe/config issue**;
-  - **operator `dmesg` (2026-09-23):** `sudo dmesg | grep -iE 'gt9271|hym8563'`
-    → **zero lines** — inconclusive for the touch chip: the `goodix_ts`
-    driver's log messages (verified in the module's strings) do **not**
-    contain the string `gt9271`, so a grep for it would not match the driver's
-    output regardless of the kernel's log prefix format; ring buffer
-    (~12.5 h uptime) wraparound is a second independent confound. The full
-    boot log (`/var/log/kern.log`, world-readable on Armbian) is the
-    definitive next evidence. Journal:
+  - **operator boot log (2026-09-23):** `sudo grep -iE 'goodix|12-0014|
+    hym8563|15-0051' /var/log/kern.log` → the probe **failed at boot**:
+    `Goodix-TS 12-0014: Error reading 1 bytes from 0x8140: -22` (×2) →
+    `I2C communication failure: -22` → `probe of 12-0014 failed with error
+    -22` (AVDD28/VDDIO fell back to dummy regulators; the "Failed to get
+    %s GPIO" error is absent → IRQ/RST GPIOs acquired). The driver logs as
+    **`Goodix-TS`** — which is why the earlier `dmesg | grep -iE
+    'gt9271|hym8563'` returned zero lines (neither term matches that name,
+    and the ring buffer had wrapped anyway). Journal:
     [2026-09-23-power-path-ws1-ic-identification.md](../../journal/2026-09-23-power-path-ws1-ic-identification.md).
 - The HAT vendor's GamePi13 wiring reference describes the I2C +
   INT/RST-GPIO topology generally, but the pin assignment for *this* board

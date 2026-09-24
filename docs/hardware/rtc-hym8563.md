@@ -30,14 +30,26 @@ battery-powered SBC.
   `hymitsu,hy8563`; the Armbian tree documents `haoyu,hym8563`). The
   `/boot/Image` strings confirm `haoyu,hym8563` is in the vendor kernel's
   hym8563 match table, so the compatible **does** match.
-- **Boot-log evidence (2026-09-23, operator):** `sudo dmesg |
-  grep -iE 'gt9271|hym8563'` returned **zero lines**. For the RTC this is
-  a valid observation — the driver logs as `hym8563 15-0051: …` and the
-  grep pattern catches that. Zero lines therefore means either (a) the
-  ring buffer (~12.5 h uptime) wrapped past the boot-time probe messages,
-  or (b) the probe never ran. **Remaining open question:** the exact probe
-  failure or deferral — check `grep -iE 'hym8563|15-0051' /var/log/kern.log`
-  (world-readable, full boot log on Armbian) to settle it.
+- **Mechanism resolved (2026-09-23, operator boot log `/var/log/kern.log`):**
+  the probe **ran** at boot and **failed** — not an un-attempted or
+  deferred bind. Verbatim (2026-09-20T16:04:51 — the flash/setup date;
+  same failure at every boot since; the node is still unbound today):
+  ```
+  rtc-hym8563 15-0051: could not init device, -22
+  rtc-hym8563: probe of 15-0051 failed with error -22
+  ```
+  The init transaction fails with **-22 (EINVAL)**; the probe aborts with
+  **no deferral and no retry**. Combined with the WS1 raw `i2cdetect` grid
+  showing **no quick-probe ACK at `0x51` on `i2c-15`** (bus 15 all `--`),
+  the evidence points to **the chip not responding on the wire** — absent,
+  unpowered, or the I2C lines not where the DT expects. This is a
+  **hardware/wiring-level issue**, not a driver, compatible, or DT-config
+  issue: the driver is registered, the node is `status=okay`, the
+  compatible (`haoyu,hym8563`) is in the vendor kernel's match table, and
+  the probe demonstrably ran and got as far as an I2C transaction.
+  (Note for the record: the earlier zero-hit `dmesg | grep -iE
+  'gt9271|hym8563'` was a ring-buffer wraparound artifact — the boot log
+  on disk is the reliable source.)
 
 ## How we know
 
@@ -62,12 +74,12 @@ battery-powered SBC.
     including a linux-rockchip binding doc);
   - net: driver present + node okay + compatible matched by this vendor
     kernel → the non-bind is a **probe-time issue**;
-  - **operator `dmesg` (2026-09-23):** `sudo dmesg | grep -iE 'gt9271|hym8563'`
-    → **zero lines** — for the RTC chip (which logs as `hym8563 15-0051: …`)
-    this means either the ring buffer (~12.5 h uptime) wrapped past the
-    boot-time probe messages, or the probe never ran; the full boot log
-    (`/var/log/kern.log`, world-readable) is the definitive next evidence.
-    Journal:
+  - **operator boot log (2026-09-23):** `sudo grep -iE 'goodix|12-0014|
+    hym8563|15-0051' /var/log/kern.log` → the probe **failed at boot**:
+    `rtc-hym8563 15-0051: could not init device, -22` → `probe of 15-0051
+    failed with error -22` (no deferral, no retry). (The earlier zero-hit
+    `dmesg` grep was a ring-buffer wraparound artifact — the on-disk boot
+    log is the reliable source.) Journal:
     [2026-09-23-power-path-ws1-ic-identification.md](../../journal/2026-09-23-power-path-ws1-ic-identification.md).
 
 ## What it portends
