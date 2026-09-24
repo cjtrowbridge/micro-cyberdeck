@@ -66,6 +66,18 @@ standard input device — no overlay or driver work was needed for this row.
   it comes up as a side effect of the PMIC driver binding, so no verify row
   exists for it (nor needs one, as long as `audio-cards`/the PMIC rail
   checks in [pmic-axp8191.md](pmic-axp8191.md) keep passing).
+- **Membrane keypad cross-cut (suspected, unconfirmed — see
+  [membrane-buttons.md](membrane-buttons.md), "Parked keys"):** the keypad
+  *pin 5* line (`gpiochip0` / line 34 / `PB2`) shows **no** GPIO transitions
+  during the 2026-09-23 full mapping session (`/home/cj/btnmap-run.log`, a
+  line the daemon deliberately does not poll either). That is consistent
+  with the line not being an independent GPIO input but wired into (or
+  shared with) this PEK input — the hypothesis this record owns, since the
+  membrane record's key count is the one thing it changes. An observed
+  event0 `KEY_POWER` during a long-press on pin 5 would confirm the fusion
+  (and would also mean a 13th-button "select"-class key is already the deck
+  power-key, which is fine for power-control purposes — the membrane
+  record treats pin 5 as out-of-scope either way).
 
 ## What it portends
 

@@ -53,7 +53,7 @@ these views, so no part number has been assigned.
 | Speaker (HAT amp) | [speaker-hat-amp.md](speaker-hat-amp.md) | Done |
 | Audio as a normal device | [audio-normal-device.md](audio-normal-device.md) | In progress — paused |
 | Headphone jack | [headphone-jack.md](headphone-jack.md) | Partial |
-| Membrane key buttons (13) | [membrane-buttons.md](membrane-buttons.md) | Not started |
+| Membrane key buttons (13) | [membrane-buttons.md](membrane-buttons.md) | In progress |
 | Power button (PMIC key) | [power-button.md](power-button.md) | Done |
 | Battery (11.1 Wh LiPo) | [battery.md](battery.md) | Not started |
 | Power path (USB-C / HAT microUSB / battery) | [power-path.md](power-path.md) | Not started |

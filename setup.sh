@@ -97,6 +97,12 @@ BRIDGE_PY="/usr/local/bin/xvfb-to-st7789.py"
 SOUND_BIN="/usr/local/bin/hat-sound"      # built from SOUND_SRC (repo)
 SOUND_SRC="tools/hat-sound.c"              # repo-relative to the caller's CWD
 SYSCTL_RT_DROPIN="/etc/sysctl.d/99-sched-rt.conf"   # board has no sysctl binary
+# Membrane-buttons daemon (gamepi-buttons.service). The vendor kernel cannot
+# take a button driver for the HAT's keys (no gpio-keys / uinput / live
+# overlays — docs/hardware/membrane-buttons.md), so a root userspace daemon
+# polls the mapped gpiod lines and injects X11 keys on :1.
+BUTTONS_PY_SRC="tools/hat-buttons.py"      # repo-relative to the caller's CWD
+BUTTONS_PY_DST="/usr/local/bin/hat-buttons.py"
 MARK_DIR="/var/lib/micro-cyberdeck"
 # Web UI + metrics API (plan 2026-09-19-23-23-36): the api/ tree provisions
 # the static dashboard (api/www/ -> /var/www/html/) + the loopback-only Go
@@ -324,8 +330,10 @@ overlay_sig() {
 # single value. overlay_desired_set() is the desired set, sorted and
 # space-joined for a byte-compare; overlay_uvs() is the same normalization of
 # what is on disk (Armbian separates with spaces; order is not guaranteed).
-# Today the set is {spi3-cs0-<MHZ>mhz}; the buttons' gpio-keys overlay joins
-# it later by extending this one function (docs/setup.md "Overlay set").
+# The set is {spi3-cs0-<MHZ>mhz} and is expected to stay a single overlay:
+# the membrane buttons are a userspace daemon (gamepi-buttons.service), not
+# a kernel overlay — the vendor kernel can't take a button driver
+# (docs/hardware/membrane-buttons.md).
 overlay_desired_set() {
   printf '%s\n' $OVERLAY_NAME | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//'
 }
@@ -412,10 +420,11 @@ apply_overlay() {
   fi
 
   # env lines: additive normalization (only our two lines, exact values)
-  # user_overlays converges to the DESIRED SET (not a single value): the
-  # current set is {spi3-cs0-<MHZ>mhz}; future overlays (the buttons'
-  # gpio-keys) are added to overlay_desired_set() and the line is rebuilt,
-  # never sed-overwritten.
+  # user_overlays converges to the DESIRED SET (not a single value), which
+  # is {spi3-cs0-<MHZ>mhz} and expected to stay so: the membrane buttons
+  # turned out not to be an overlay after all
+  # (docs/hardware/membrane-buttons.md). Any future overlay joins
+  # overlay_desired_set(); the line is rebuilt, never sed-overwritten.
   if ! grep -q "^overlays=.*${DESIRED_OVERLAY_CORE}\b" /boot/armbianEnv.txt; then
     echo "overlays=${DESIRED_OVERLAY_CORE}" >> /boot/armbianEnv.txt
     log "env        +overlays=${DESIRED_OVERLAY_CORE}"
@@ -733,6 +742,27 @@ Environment=HOME=${DECK_HOME}
 Environment=DISPLAY=:1
 ExecStartPre=/bin/sh -c 'for i in \$(seq 1 50); do /usr/bin/xdpyinfo -display :1 >/dev/null 2>&1 && exit 0; sleep 0.2; done; exit 1'
 ExecStart=/usr/bin/x11vnc -display :1 -rfbport ${DESIRED_VNC_PORT} -forever -shared${localhost_flag} -rfbauth ${DECK_HOME}/.vnc/passwd
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
+EOF
+      ;;
+    buttons)
+      cat <<EOF
+[Unit]
+Description=GamePi membrane button daemon (gpiod -> X11 XTest key injection)
+After=gamepi-xvfb.service
+
+[Service]
+# As root (no User=): /dev/gpiochip* is root:root 0600 — the deck user's
+# 'input' group does not cover it. DISPLAY=:1 is the open Xvfb desktop
+# (no Xauthority needed). The daemon reconnects to a restarted X itself,
+# so After= is ordering, not a hard dependency.
+Environment=DISPLAY=:1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 ${BUTTONS_PY_DST}
 Restart=always
 RestartSec=1
 
@@ -1266,7 +1296,7 @@ SHELLINABOX_ARGS="--no-beep"'
   # (e) overlay (§5)
   apply_overlay
 
-  # (f) artifacts (§6): bridge, sound binary, RT drop-in, seven units, autostart
+  # (f) artifacts (§6): bridge, sound, button daemon, RT drop-in, units, autostart
   local bridge_content unit target content autostart autostart_content
   bridge_content="$(generate_bridge)"
   write_if_changed "$BRIDGE_PY" 755 root "$bridge_content"
@@ -1277,7 +1307,14 @@ SHELLINABOX_ARGS="--no-beep"'
   # be -1 already; the file is what makes that survive.
   write_if_changed "$SYSCTL_RT_DROPIN" 644 root 'kernel.sched_rt_runtime_us = -1'
 
-  for unit in xvfb openbox vnc lcd sound websockify shellinabox; do
+  # Membrane-buttons daemon (repo source -> installed copy the unit runs)
+  if [[ -f "$BUTTONS_PY_SRC" ]]; then
+    write_if_changed "$BUTTONS_PY_DST" 755 root "$(cat "$BUTTONS_PY_SRC")"
+  else
+    add_item "buttons-py" DRIFT "$BUTTONS_PY_SRC not found in the repo"
+  fi
+
+  for unit in xvfb openbox vnc lcd sound buttons websockify shellinabox; do
     target="/etc/systemd/system/gamepi-${unit}.service"
     content="$(generate_unit "$unit")"
     write_if_changed "$target" 644 root "$content"
@@ -1303,15 +1340,20 @@ SHELLINABOX_ARGS="--no-beep"'
         touch_units=1
       fi
     done
-    # A new hat-sound binary is a unit-file change in disguise: the running
-    # process must be restarted onto it or the service keeps the old code.
+    # A new hat-sound binary or hat-buttons.py is a unit-file change in
+    # disguise: the running process must be restarted onto it or the
+    # service keeps running the old code.
     for f in "${CHANGED_FILES[@]}"; do
       if [[ "$f" == "$SOUND_BIN" ]]; then
         unit_written["gamepi-sound.service"]=1
         touch_units=1
       fi
+      if [[ "$f" == "$BUTTONS_PY_DST" ]]; then
+        unit_written["gamepi-buttons.service"]=1
+        touch_units=1
+      fi
     done
-    for u in xvfb openbox vnc lcd sound websockify shellinabox; do
+    for u in xvfb openbox vnc lcd sound buttons websockify shellinabox; do
       if [[ "$(systemctl is-active "gamepi-$u.service" 2>/dev/null || true)" != "active" ]]; then
         touch_units=1
       fi
@@ -1319,7 +1361,7 @@ SHELLINABOX_ARGS="--no-beep"'
     if (( touch_units == 1 )); then
       log "systemd: daemon-reload + restart changed / start inactive managed units"
       systemctl daemon-reload
-      for u in xvfb openbox vnc lcd sound websockify shellinabox; do
+      for u in xvfb openbox vnc lcd sound buttons websockify shellinabox; do
         svc="gamepi-$u.service"
         if [[ -n "${unit_written[$svc]:-}" ]]; then
           log "systemd: restarting $svc (unit file written this run)"
@@ -1493,7 +1535,7 @@ run_verify() {
     add_item "xvfb-screen" "FAIL" "xdpyinfo :1 unreachable"
   fi
 
-  for u in xvfb openbox vnc lcd sound websockify shellinabox; do
+  for u in xvfb openbox vnc lcd sound buttons websockify shellinabox; do
     st="$(systemctl is-active "gamepi-$u.service" 2>/dev/null || true)"
     if [[ "$st" == "active" ]]; then
       add_item "unit:$u" "PASS"

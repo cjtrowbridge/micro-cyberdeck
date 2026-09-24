@@ -17,13 +17,14 @@ next repair run converges away.
 
 | File | Owner | Re-run behavior |
 |---|---|---|
-| `/boot/armbianEnv.txt` (two GamePi lines) | setup.sh | **Additive, byte-stable.** `user_overlays=` converges to the desired **set** of user overlays (order-insensitive; the current set is `{spi3-cs0-<MHZ>mhz}` — the buttons' `gpio-keys` overlay joins the set by extending `overlay_desired_set()` in §5, never by another writer); the line is rewritten only when the set differs. `overlays=` gets the stock `spi3-cs0-cs1-spidev` line appended only when missing. No `sed` rewrites of unrelated lines, ever. Hand edits to the GamePi lines are drift, repaired next run. |
+| `/boot/armbianEnv.txt` (two GamePi lines) | setup.sh | **Additive, byte-stable.** `user_overlays=` converges to the desired **set** of user overlays (order-insensitive; the current set is `{spi3-cs0-<MHZ>mhz}` and is expected to stay a single overlay — the membrane buttons did not become an overlay: the vendor kernel can't take a button driver, so they are the userspace `gamepi-buttons` daemon instead, see "Membrane buttons"); the line is rewritten only when the set differs. `overlays=` gets the stock `spi3-cs0-cs1-spidev` line appended only when missing. No `sed` rewrites of unrelated lines, ever. Hand edits to the GamePi lines are drift, repaired next run. |
 | `/boot/overlay-user/<NAME>.dtbo` (older: `/boot/armbian-overlays/`) | overlay engine | Materialized by `armbian-add-overlay` from the user DTS in §5 of the script; Armbian writes user overlays to `/boot/overlay-user/` (the older name is still recognized when present). If missing while the env line exists, the script re-derives the DTS and re-runs `armbian-add-overlay` (reboot-requiring if the .dtbo bytes differ). |
 | `/root/spi3-cs0-<MHZ>mhz.dts` | setup.sh | The user-space overlay source. Kept when byte-stable; regenerated + re-`armbian-add-overlay` when the DTS on disk differs from §5 (removing it does NOT silently drop the active overlay — the stamp mechanism below decides). |
 | `/root/armbianEnv.txt.before-gamepi` | setup.sh | Created once, on the first overlay edit, as a one-time safety backup. Never churned again. |
 | `/usr/local/bin/xvfb-to-st7789.py` | setup.sh | Compare-then-write against the §6 template. |
 | `/usr/local/bin/hat-sound` | setup.sh | Rebuilt from the tracked `tools/hat-sound.c` (canonical flags, `-lm -lpthread`) on every run; **compare-then-install** — installed only when the bytes differ, and the `gamepi-sound` unit is restarted onto the new binary in the unit-repair step (a binary change is a unit change in disguise). |
-| `/etc/systemd/system/gamepi-{xvfb,openbox,vnc,lcd,sound,websockify,shellinabox}.service` | setup.sh | Compare-then-write against the §6 templates. The two bridge units (browser SSH/VNC, plan 2026-09-20-10-47-32): `gamepi-websockify` runs `websockify 0.0.0.0:6080 127.0.0.1:5900` (all-interface WS listen, loopback RFB dial — see "Browser access"); `gamepi-shellinabox` runs `shellinaboxd` as the deb's own system user with a managed pidfile, `Type=forking`, `--disable-ssl` (plain HTTP; TLS belongs at a real reverse proxy), `--css /usr/local/lib/shellinabox-dark.css` (managed dark theme — the css shipped inside the binary is light, so the theme is *appended* after it; row 24), `:4200`. A `shellinabox` PAM file is a managed artifact too — without `/etc/pam.d/shellinabox` every web session fails auth (row 20). |
+| `/usr/local/bin/hat-buttons.py` | setup.sh | Compare-then-write from the tracked `tools/hat-buttons.py` (the membrane-buttons daemon, see "Membrane buttons"). The daemon is a pure-text interpreter script, so there is no build step — the installed copy *is* the source bytes; a changed file restarts `gamepi-buttons` in the unit-repair step (same binary-changes-unit rule as `hat-sound`). |
+| `/etc/systemd/system/gamepi-{xvfb,openbox,vnc,lcd,sound,buttons,websockify,shellinabox}.service` | setup.sh | Compare-then-write against the §6 templates. `gamepi-buttons` is the membrane-buttons daemon unit (see "Membrane buttons"). The two bridge units (browser SSH/VNC, plan 2026-09-20-10-47-32): `gamepi-websockify` runs `websockify 0.0.0.0:6080 127.0.0.1:5900` (all-interface WS listen, loopback RFB dial — see "Browser access"); `gamepi-shellinabox` runs `shellinaboxd` as the deb's own system user with a managed pidfile, `Type=forking`, `--disable-ssl` (plain HTTP; TLS belongs at a real reverse proxy), `--css /usr/local/lib/shellinabox-dark.css` (managed dark theme — the css shipped inside the binary is light, so the theme is *appended* after it; row 24), `:4200`. A `shellinabox` PAM file is a managed artifact too — without `/etc/pam.d/shellinabox` every web session fails auth (row 20). |
 | `/etc/pam.d/shellinabox` | setup.sh | Compare-then-write, root:root 0644: `auth`/`account`/`password` include `common-*` + `session required pam_env.so` + `session include common-session` — exactly the PAM stack sshd uses, plus `pam_env`. The deb ships none. The PAM service name `shellinabox` is hard-coded inside `shellinaboxd`. |
 | `/etc/default/shellinabox` | setup.sh | Compare-then-write, root:root 0644: **`SHELLINABOX_DAEMON_START=0`** — the vendor sysvinit script must start no daemon of its own, or it holds `0.0.0.0:4200` at boot and `gamepi-shellinabox` bounces with `Failed to find any available port!` (field evidence 2026-09-20). With the S-start links removed and any stray stopped, setup.sh also owns a converge step that keeps the vendor init path disabled: `update-rc.d shellinabox disable` + `/etc/init.d/shellinabox stop` (the script's own stop is `start-stop-daemon --oknodo`, safe to call always) + `systemctl reset-failed gamepi-shellinabox`. The K01 stop links are left — harmless no-ops once nothing starts. Drift detection covers the rc **S**-start links and any `shellinaboxd` outside this unit's process tree (the daemon's `--background` parent+child pair is ours, not a stray). |
 | `/usr/local/lib/shellinabox-dark.css` | setup.sh | Compare-then-write from `api/shellinabox/shellinabox-dark.css`, root:root 0644: the managed dark theme for the ShellInABox client. The package ships no client files on disk — only the light stylesheet inside the binary — and `shellinaboxd --css=FILE` *appends* the file's content after that built-in css, so at equal specificity the theme wins. It lives under `/usr/local` because package upgrades never touch it (an apt upgrade of `shellinabox` cannot clobber it). The restart gate re-applies it whenever the unit file changes this run (the unit carries the flag), and verify row 24 proves it reaches the browser: the dashboard bg marker `0b0e14` must appear in the css the daemon serves at `/shell/styles.css`. The palette is the dashboard's (`api/www/style.css`). |
@@ -44,7 +45,8 @@ run repairs them. If you need a permanent custom change, change the template in
 §5 of `setup.sh` (and document it here) — the script converges to its templates,
 never to the filesystem.
 
-The seven `gamepi-*.service` files, the sound binary, the bridge script, the
+The eight `gamepi-*.service` files, the sound binary, the buttons daemon
+(`/usr/local/bin/hat-buttons.py`), the bridge script, the
 sysctl drop-in, the autostart, the `/etc/pam.d/shellinabox` file, the `/usr/local/lib/shellinabox-dark.css` theme, and the
 `/etc/default/shellinabox` conffile are
 **byte-canonical with the verified live configuration**: setup.sh templates them
@@ -152,7 +154,7 @@ Reboot mode flags are ignored in plan mode and never recorded.
 | 4 | VNC password exists | `<home>/.vnc/passwd` exists, non-empty |
 | 5 | SPI overlay active | `overlays=` contains `spi3-cs0-cs1-spidev` AND `user_overlays=spi3-cs0-<MHZ>mhz` (exact value); `/dev/spidev3.0` exists |
 | 6 | Bridge bound + screen size OK | `systemctl is-active gamepi-lcd.service`; `journalctl -u gamepi-lcd` **since the unit's current `ExecMainStartTimestamp`** contains `X11 root: 960x960` (the line is printed once at process start; anchoring to the current start avoids both the stale-evidence trap and a dead unit passing on old lines) |
-| 7 | Units all active | `systemctl is-active` for all seven `gamepi-*` units (the loop `xvfb openbox vnc lcd sound websockify shellinabox`): xvfb, openbox, vnc, lcd, sound (the v3.6 socket engine daemon), websockify, shellinabox (incl. the two browser-bridge units, plan 2026-09-20-10-47-32) |
+| 7 | Units all active | `systemctl is-active` for all eight `gamepi-*` units (the loop `xvfb openbox vnc lcd sound buttons websockify shellinabox`): xvfb, openbox, vnc, lcd, sound (the v3.6 socket engine daemon), buttons (the gpiod→XTest membrane key daemon), websockify, shellinabox (incl. the two browser-bridge units, plan 2026-09-20-10-47-32) |
 | 8 | SPI clock | `cat /sys/class/spi-master/spi3/max_speed_hz` (informational; logged, not gating) |
 | 9 | RT budget live + persisted | `cat /proc/sys/kernel/sched_rt_runtime_us` == `-1` (the drop-in persists it across reboots; the board has no `sysctl` binary, so the read is from `/proc`) |
 | 10 | Audio topology as intended | `/proc/asound/cards` contains exactly one card, `allwinnerhdmi` (the HAT amp is GPIO/PWM pin 12 — any second card means something bound an I2S path that should not exist here) |
@@ -351,6 +353,86 @@ connections.
 Stale audio-path overlays (`es8388-audio`, `i2c0`) are removed on every
 apply run: the HAT amplifier is GPIO/PWM, not I2S (verified 2026-09-15), so
 these dtbos bind nothing — a zombie probe at every boot.
+
+## Membrane buttons (hat-buttons.py)
+
+The HAT's 13 membrane keys are plain GPIO lines on two pinctrl controllers:
+ine on `/dev/gpiochip0` (label `2000000.pinctrl`, the main A733 controller)
+and one on `/dev/gpiochip1` (label `7025000.pinctrl`, base 352) —
+`/dev/gpiochipN` is the *registration-order* number, not the SoC address,
+so the daemon pins nodes by path AND warns if the sysfs label no longer
+matches. The intended `gpio-keys` kernel driver is **impossible on this
+board**: the 6.6.98-vendor-sun60iw2 kernel has neither `CONFIG_INPUT_GPIO_KEYS`
+nor `CONFIG_INPUT_UINPUT` (no `/dev/uinput`), the on-disk headers are a
+pruned package with no drivers for either, and there is no runtime DT-overlay
+machinery. So the input path is userspace: the `gamepi-buttons` unit runs
+`/usr/local/bin/hat-buttons.py` as **root** (the `/dev/gpiochip*` nodes are
+`root:root 0600` — the deck user's `input` group does not cover them) and
+synthesizes standard X11 key events on the open `:1` Xvfb desktop through
+the XTEST extension (pure-Python `python3-xlib` speaks XTest on the wire;
+no native library is needed). A press is one X Press + Release pair on the
+focused window — anything on the desktop that reacts to keyboard input
+receives it, which is the deck's whole point.
+
+**Key table** (single source of truth: `tools/hat-buttons.py` `KEYS`, verified
+in the live mapping session 2026-09-23 — `/home/cj/btnmap-run.log`, every
+entry a clean paired press/release): nine lines idle **HIGH** and go low on
+press (active-low); `PD2` (Left, pin 36) is the one active-HIGH line.
+
+| Key | Keysym | Chip | Line | A733 | Pin |
+|---|---|---|---|---|---|
+| D-pad up | `Up` | gpiochip0 | 140 | PE12 | 29 |
+| D-pad down | `Down` | gpiochip0 | 141 | PE13 | 31 |
+| D-pad left | `Left` | gpiochip0 | 98 | PD2 | 36 (active-HIGH) |
+| Face A | `a` | gpiochip0 | 39 | PB7 | 40 |
+| Face B | `b` | gpiochip0 | 40 | PB8 | 38 |
+| Face X | `x` | gpiochip0 | 42 | PB10 | 10 |
+| Left shoulder | `Control_L` | gpiochip1 | 2 | PL2 | 16 |
+| Right shoulder | `Control_R` | gpiochip0 | 41 | PB9 | 8 |
+| Start | `Return` | gpiochip0 | 38 | PB6 | 35 |
+
+Edges commit only after 30 ms of stability at the new level (any raw level
+motion cancels the pending edge) — well above membrane bounce, below the
+~50 ms human-press floor, so a quick release never double-fires or
+phantom-taps.
+
+**Parked keys** — four of the thirteen are not in the table, by evidence:
+
+- pins 32/33/37 (`gpiochip0` lines 97/99/100, `PD1`/`PD3`/`PD4`, expected
+  face Y / d-pad Right / Select) are all idle **LOW** and never transitioned
+  once in the entire mapping log; under a grounded probe that is indistinguish
+  from a dead contact on that side of the membrane. The re-attempt procedure
+  is in `docs/hardware/membrane-buttons.md` "Parked keys"; a confirmed round
+  adds rows to `KEYS` — nothing else in this section changes.
+- the 13th key (pin 5, `gpiochip0` line 34 / `PB2`) is suspected fused into
+  the AXP PMIC's PEK input, which already delivers `KEY_POWER` on
+  `/dev/input/event0` (`docs/hardware/power-button.md`) — deliberately not
+  polled, to avoid double-triggering the power path.
+
+**Bring-up proof.** The unit's own verify row is simply `gamepi-buttons`
+active (row 7). A working key path is a desktop-side property (a focused
+window must actually receive the synthesized keys), so the live proof is
+interactive: on the `:1` desktop (VNC/noVNC), focus a key-echo window — a
+terminal, `xev` (apt `x11-utils` is already installed), or anything
+keyboard-reactive — and press the nine keys; each should produce its key. A
+terminal alternative for the whole loop: with a window focused, `sudo
+python3 /usr/local/bin/hat-buttons.py --selftest --inject-test` (unit
+stopped first — a second holder can't reopen the lines; `--inject-test`
+sends one `Control_L` press+release through the real path at the end).
+`--selftest` also re-proves X connectivity, keycode resolution, and idle
+levels at any time:
+
+```sh
+sudo systemctl stop gamepi-buttons        # only for the inject-test variant
+sudo python3 /usr/local/bin/hat-buttons.py --selftest [--inject-test]
+sudo systemctl start gamepi-buttons       # (if you stopped it)
+```
+
+The daemon reconnects to `:1` every 5 s on display loss (`Restart=always`,
+`RestartSec=1`), and `After=gamepi-xvfb` is ordering only — no `Requires`,
+same tolerance-and-self-heal posture as the websockify unit. No reboot can
+be involved: this is a pure userspace service with zero kernel surface, so
+nothing here touches the reboot policy.
 
 ## Web UI + metrics API
 
