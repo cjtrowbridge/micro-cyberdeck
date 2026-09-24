@@ -52,6 +52,7 @@ these views, so no part number has been assigned.
 | Screen touch (gt9271) | [touch-gt9271.md](touch-gt9271.md) | Not started |
 | Speaker (HAT amp) | [speaker-hat-amp.md](speaker-hat-amp.md) | Done |
 | Audio as a normal device | [audio-normal-device.md](audio-normal-device.md) | In progress — paused |
+| Audio input (microphone) | [audio-input-mic.md](audio-input-mic.md) | Not started |
 | Headphone jack | [headphone-jack.md](headphone-jack.md) | Partial |
 | Membrane key buttons (13) | [membrane-buttons.md](membrane-buttons.md) | In progress |
 | Power button (PMIC key) | [power-button.md](power-button.md) | Done |
