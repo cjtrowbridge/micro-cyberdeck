@@ -69,7 +69,7 @@ budget.
   real commit — reproducible from the repo alone.
 - **External clone:** `./ebe-boilerplate` @ `e741e1c…` (`origin/main`, depth-1),
   git-ignored (board-clone dependency, never tracked — `.gitignore` entry).
-- **Weights (decision recorded):** `~/voice-agent/**ggml-medium.bin**` —
+- **Weights (decision recorded):** `~/voice-agent/ggml-medium.bin` —
   **1.48 G**. Path chosen: not `/var/lib/` (no sudo touch) and not the repo
   (git, never on the order of a GB).
 - **Corrected the weights filename (my earlier error):** the canonical asset is
@@ -81,11 +81,12 @@ budget.
 - **Apt batch (G1-b remainder) — the ONLY operator step left before G1-c's
   build:** run this (it needs a password I cannot provide):
   ```bash
-  sudo apt install -y build-essential pkg-config   # libasound2-dev ONLY if build errors demand alsa.h
+  sudo apt install -y build-essential cmake pkg-config   # libasound2-dev ONLY if build errors demand alsa.h
   ```
   `make` was already present; `espeak-ng` present (`/usr/bin/espeak-ng`).
   I will not run `sudo` (I cannot enter a password); once you run it, say the
-  word and I pick up the G1-c `make` of the server + the user unit on
+  word and I pick up the G1-c **CMake** build of the server (v1.9.4's root
+  Makefile wraps `cmake -B build && cmake --build build`) + the user unit on
   127.0.0.1:8080.
 
 **Same-change updates:** gate plan G1-a → `[x]`, G1-b/G1-c partial `[x]`, G1-e

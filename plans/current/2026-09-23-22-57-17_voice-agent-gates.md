@@ -64,28 +64,35 @@ audio.
 
 ## G1 — models resident (design §3, §8; independent of G0's [?] item)
 
-- [ ] (G1-a) **Operator checkpoint: disk.** Root FS has **2.5 G free (92%)**;
-  G1 needs ≈1.45 G (whisper-medium) + whisper.cpp build + Go module cache +
-  any apt batch ≲ 2–2.5 G. Decision: prune **qwen3.5:9b (6.59 G, inside the
-  Ollama container volume — `docker`-side, no host binary involved)** and/or
-  free other space. *Not destructive-safe for the agent to do unilaterally.*
-- [ ] (G1-b) Provisioning batch (design §9), operator-run:
-  `sudo apt install -y build-essential make pkg-config libasound2-dev`
-  (verify `espeak-ng` first — the tts-selftest implies it's present); then
-  vendoring: whisper.cpp pinned as a submodule at `third_party/whisper.cpp`
-  (shallow clone, tagged), ebe-boilerplate cloned to the board's workspace
-  (external — not a submodule, per design §9)
-- [ ] (G1-c) whisper-medium: fetch `ggml-model-whisper-medium-*.bin`
-  (~1.5 G) to a board path (e.g. `/var/lib/whisper/` or
-  `~/voice-agent/` — decided at install), `make` the `server`, run it as a
-  **user systemd unit** (127.0.0.1:8080, `Restart=always`)
+- [x] (G1-a) **Operator checkpoint: disk — satisfied 2026-09-23.** Pruned
+  **qwen3.5:9b (measured 6.14 G, inside the Ollama container volume —
+  `docker`-side, no host binary involved)** on the operator's instruction:
+  root FS **2.5 G free (92 %) → 8.6 G free (71 %)**. `setup.sh` verified
+  presence-only (no re-pull risk); `/api/ps` empty before and after.
+  Evidence: [journal/2026-09-23-voice-agent-g1a-9b-prune.md](../../journal/2026-09-23-voice-agent-g1a-9b-prune.md).
+- [x] (G1-b) **Vendoring done 2026-09-23 (the no-sudo side); the apt install
+  batch is the one remaining step (operator-run).** `third_party/whisper.cpp`
+  pinned as a submodule at tag `v1.9.4` (`927cfce`); `ebe-boilerplate` cloned
+  to the board's workspace (`e741e1c`, git-ignored — external, not a
+  submodule, per design §9). Outstanding (corrected from the original
+  wording — v1.9.4 builds with **CMake**; its root Makefile wraps
+  `cmake -B build && cmake --build build`):
+  `sudo apt install -y build-essential cmake pkg-config` (+ `libasound2-dev`
+  only if the build errors on `alsa.h`); `make` and `espeak-ng` are already
+  present on the board.
+- [x] (G1-c) **Weights fetched 2026-09-23; build + unit pending the apt
+  batch.** The canonical asset is **`ggml-medium.bin`** (1.48 G; the
+  `ggml-model-whisper-medium-*.bin` name was stale — see journal), fetched to
+  `~/voice-agent/ggml-medium.bin` (path decided: not `/var/lib/` — no sudo
+  touch — and not the repo). Remaining: CMake build of `examples/server`,
+  then a **user systemd unit** (127.0.0.1:8080, `-t 2`, `Restart=always`).
 - [ ] (G1-d) Ollama residency pin: `keep_alive: -1` requests against the
   existing `ollama` Docker deployment (127.0.0.1:11434) for
   `qwen3.5:4b`; verify loaded after ≥10 min idle (no eviction)
-- [ ] (G1-e) **Exit criterion:** `free -h` with both idle-resident shows the
-  design's ~5.2 GB combined with ≥ ~5 G still available, logged to the
-  journal; whisper `/inference` answers a test WAV; Ollama `/api/tags` shows
-  `qwen3.5:4b` loaded with `size` ~3.4 G
+- [ ] (G1-e) **Exit criterion:** `free -h` with both idle-resident shows
+  ≈ 5 GB combined (measured: 3.16 G 4b + ~1.5 G medium + ~0.3 ebe/llvmpipe)
+  with ≈ 4 G still available, logged to the journal; whisper `/inference`
+  answers a test WAV; Ollama `/api/ps` shows `qwen3.5:4b` resident
 
 ## G2 — the wire (design §5–7, §8)
 

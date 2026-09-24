@@ -60,10 +60,10 @@ only, consistent with the deck's loopback-only posture for the Go metrics API.
 
 | Model | Residency mechanism | RAM (expected) |
 |---|---|---|
-| qwen3.5:4b Q4_K_M | Ollama unloads idle models after ~5 min by default. Send **`keep_alive: -1`** with every `/api/chat` request (or set `OLLAMA_KEEP_ALIVE` on the container) → the 3.4 GB weights stay mapped for the process life of the container. | ~3.4–4.0 GB |
-| whisper-medium | No unloader exists to fight: run one `whisper-server` process (`-m ggml-model-whisper-medium-*.bin -t 2`) as a **user systemd unit**; the model is loaded at process start and lives until the process dies. `Restart=always`. | ~1.5 GB |
+| qwen3.5:4b Q4_K_M | Ollama unloads idle models after ~5 min by default. Send **`keep_alive: -1`** with every `/api/chat` request (or set `OLLAMA_KEEP_ALIVE` on the container) → the measured **3.16 GB** weights stay mapped for the process life of the container. | ~3.2–3.8 GB |
+| whisper-medium | No unloader exists to fight: run one `whisper-server` process (`-m ggml-medium.bin -t 2`) as a **user systemd unit**; the model is loaded at process start and lives until the process dies. `Restart=always`. | ~1.5 GB |
 
-RAM feasibility (board reports **11 Gi** total; [docs/hardware/npu.md](../../docs/hardware/npu.md) "RAM observation"): 3.4 + 1.5 + ~0.3 (ebe/llvmpipe) ≈ **5.2 GB** vs ~8.9 Gi currently available → both resident comfortably, ~5–6 GB headroom left for the desktop, the whisper server's audio buffers, and transient WAV files. *Validation at G3, not assumed: baseline `free -h` with both idle-resident, then under load.*
+RAM feasibility (board reports **11 Gi** total; [docs/hardware/npu.md](../../docs/hardware/npu.md) "RAM observation"): 3.16 + 1.5 + ~0.3 (ebe/llvmpipe) ≈ **5 GB** vs **9.0 Gi** currently available (measured 2026-09-23; 4b = 3.16 G per `/api/tags`) → both resident comfortably, ~4–5 GB headroom left for the desktop, the whisper server's audio buffers, and transient WAV files. *Validation, not assumption: G1 checks the idle baseline `free -h`, G3 checks under load.*
 
 Scheduling (efficiency lever, optional until measured): `taskset` whisper.cpp to the four A76 cores, leave the A55s for the HUD/bridge/desktop. Measure first; the deck's fan budget ([docs/hardware/fan.md](../../docs/hardware/fan.md)) is the reason not to just pin the big cores blindly.
 
@@ -117,7 +117,7 @@ surface.
   (`server` keeps the model mapped).
 - **Server mode** (`server -p 8080 -m … -t 2 -m`): the app POSTs WAV to
   `127.0.0.1:8080/inference`; resident for the life of the unit.
-- **Model:** whisper-medium ≈ **1.45 GB** on disk, ~1.5 GB resident.
+- **Model:** whisper-medium ≈ **1.48 GB** on disk (`ggml-medium.bin`), ~1.5 GB resident.
 - **Latency expectation (design assumption, to be confirmed at G2):** medium
   on CPU (4×A76, A733, no NEON-LLM-boost for whisper) is roughly **1× real-time
   class** — a 5 s utterance ≈ a few seconds of decode. For a push-to-talk agent
@@ -172,7 +172,7 @@ surface.
 | Gate | What it proves | Exit |
 |---|---|---|
 | **G0 — the mic** | which capture option (§4) yields a working input: `arecord -l` on `hw:0`, tone-into-jack probe, reference-clone pinout lookup (USB mic ordering is the fallback that can always unblock) | an `ALSA_INPUT` string that records audible audio, recorded in a journal |
-| **G1 — models resident** | whisper-server up with medium loaded + Ollama loaded with 4b + `keep_alive:-1`; **both** idle, `free -h` shows ~5.2 GB total with ~5 GB free; neither evicted after 10 min | the residency numbers above, journal-logged |
+| **G1 — models resident** | whisper-server up with medium loaded + Ollama loaded with 4b + `keep_alive:-1`; **both** idle, `free -h` shows ≈ 5 GB total (measured models 3.16 + ~1.5) with ≈ 4 GB free; neither evicted after 10 min | the residency numbers above, journal-logged |
 | **G2 — the wire** | `arecord`→WAV→whisper→text→Ollama→text→espeak-ng→**speaker**, shell-scripted, headless (no app, no HUD) — the loop with zero UI | a working shell chain + a journal with measured per-stage wall times |
 | **G3 — the app** | the ebe app on `:1`: full-screen 960×960, HUD state machine (idle → LISTEN on hold edge → ANSWER on release), the loop from G2 driven by `Control_L`, answer spoken + streamed | the push-to-talk round trip works on the deck |
 

@@ -1,7 +1,9 @@
 # Voice Agent (push-to-talk runtime)
 
-> Status: **Design** — nothing is built or installed yet. This project owns the
-> "voice-interactive local agent software" item from the top-level
+> Status: **Gates in progress** — G0 decided (Option A, USB mic via OTG;
+> hardware proof pending), G1 underway (9b pruned, whisper.cpp v1.9.4 pinned,
+> medium weights on board; apt batch + build + units remain). This project
+> owns the "voice-interactive local agent software" item from the top-level
 > [Known Unresolved Issues](../../README.md#known-unresolved-issues) list.
 
 A push-to-talk voice agent for the deck: **hold the left bumper → talk →
@@ -24,7 +26,7 @@ RAM** so the round trip has no model-load latency:
 | Dependency | Role | Where it lives |
 |---|---|---|
 | [ebe-boilerplate](https://github.com/cjtrowbridge/ebe-boilerplate) | the Ebitengine skeleton the HUD runs in ("the ebe pipeline"; top-level README) | cloned at bring-up, not a submodule |
-| whisper.cpp | provides `server` + the `ggml-model-whisper-medium-*.bin` weights | build + weights live on the board (operator), version pinned here once chosen |
+| [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | provides `server` + the medium weights | pinned in-repo as a submodule at **v1.9.4** (`third_party/whisper.cpp`); build + weights live on the board at `~/voice-agent/ggml-medium.bin` (1.48 G) |
 | Ollama 0.34.1 (Docker container, `:11434`) | serves qwen3.5:4b on CPU | existing `setup.sh`-verified deployment — see [docs/hardware/npu.md](../../docs/hardware/npu.md) |
 
 ## Related deck records
@@ -40,13 +42,14 @@ RAM** so the round trip has no model-load latency:
 - **No audio input path exists on the board today** — only the `allwinnerhdmi`
   ALSA card; capture is a *design decision with two candidate paths*, not a
   bug (see docs/design.md §4: USB mic vs. HAT codec input)
-- **Disk is tight**: ~2.5 GiB free vs ~1.45 GB (whisper-medium weights) +
-  toolchain + module cache; the 6.59 GB qwen3.5:9b model is the obvious prune
-  candidate — an operator decision
+- **Disk was tight; resolved 2026-09-23**: qwen3.5:9b (measured 6.14 G) pruned
+  from the Ollama container — root FS 2.5 G free (92 %) → **8.6 G free
+  (71 %)**; [journal/2026-09-23-voice-agent-g1a-9b-prune.md](../../journal/2026-09-23-voice-agent-g1a-9b-prune.md)
 - **No GPU path** to the `:1` desktop (no Mali/panfrost kernel driver): the HUD
   renders under llvmpipe — fine for a text HUD, sized accordingly
-- The **build toolchain** on the board (Go 1.24.4, no cmake/g++/pkg-config)
-  needs one provisioning batch before anything compiles
+- **Build toolchain**: `make` + Go 1.24.4 present on the board;
+  `cmake`/`g++`/`pkg-config` still missing — one apt batch (operator, sudo)
+  is the last G1-b step before anything compiles
 
 Gates G0–G3 in docs/design.md must be green (in order) before this project is
 "running" rather than "designed"; the first green round trip also flips the
