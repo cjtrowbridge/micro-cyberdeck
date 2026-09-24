@@ -29,11 +29,17 @@ left bumper is held. Distinct from the output chain, which is settled
 - **The ES8388 I²S path was probed and bound nothing** — the HAT codec is
   *not* an I²S codec (that was a playback-side diagnosis; kept ruled out by
   `setup.sh`'s `stale-overlays` verify row, which also asserts exactly one
-  ALSA card and no `i2c-0` adapter). Whether **any** component on the HAT has
-  an input stage is unverified; the eight-pin mystery IC in the HAT's audio
-  section (beside the `4R7` inductor, marked in the underside photos) is still
-  unidentified pending the power-path plan's WS1 chip-ID step
-  ([power-path.md](power-path.md)).
+  ALSA card and no `i2c-0` adapter).
+- **The HAT's last unexamined candidate IC is a power part, not an audio
+  input stage.** The eight-pin IC beside the `4R7` inductor — previously the
+  "mystery IC" the onboard-mic option kept open — read **`9813` / `2512`**
+  (date code week 12 of 2025) under the 2026-09-24 macro set; its
+  switching-charge/boost topology (buck-boost controller, `SY89813`-class,
+  *marking-confirmed, datasheet-unconfirmed*) and its non-I²C visibility
+  make it the HAT's power IC, with the `NS8002` amp confirmed as a
+  *separate, adjacent* part — see
+  [power-path.md](power-path.md) WS1.5. That was the last unidentified IC in
+  the chain, so **no onboard input stage is demonstrated anywhere**.
 - **The 3.5 mm jack** ("headphone jack" / the README's "aux cord plug") shares
   the amp's output path ([headphone-jack.md](headphone-jack.md)) and has never
   been tested as an input. Even if it carries a mic conductor, there is
@@ -81,11 +87,14 @@ left bumper is held. Distinct from the output chain, which is settled
     card appears as `hw:1` (expected) with a capture subdevice; the sidecar's
     `ALSA_INPUT` takes it. Cost: one part, and a visible dongle on the deck
     while it's plugged
-  - **B — onboard input, if the HAT actually has one (unproven):** needs the
-    physical investigation (G0-c): open the case, trace the jack's mic
-    conductor, identify the eight-pin IC (shareable with power-path WS1).
-    Even a winning find requires a DT overlay and possibly a codec driver
-    module (`CONFIG_SND_SOC_ES8388` absent *to-probe*) before Linux sees it
+  - **B — onboard input, if the HAT actually has one (now thinner odds):**
+    the eight-pin IC that option kept open has been ID'd as the HAT's power
+    part (marking `9813`/`2512`,
+    [power-path.md](power-path.md) WS1.5), so the remaining question is
+    purely the 3.5 mm jack's second conductor (G0-c): open the case and
+    trace it. Even a winning find requires a DT overlay and possibly a codec
+    driver module (`CONFIG_SND_SOC_ES8388` absent *to-probe*) before Linux
+    sees it
   - **C — the 3.5 mm jack as TRRS mic input:** dead unless B shows the wiring;
     the amp is output-only, so there is no input stage behind it today
 - **Disk interaction:** the mic itself costs nothing on disk (USB), but G1's
