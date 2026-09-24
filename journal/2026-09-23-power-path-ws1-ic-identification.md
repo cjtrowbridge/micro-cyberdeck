@@ -47,10 +47,16 @@ Reliable evidence (sysfs claimers, from the script's 3a) vs. the grid (3b):
 - The one raw responder, **`0x30` on `i2c-20`**, sits on the **HDMI controller's CEC/DDC bus**, not a power-path bus. It is outside this arc's scope (likely a display/CEC-related node or a stale/held line). Per the detect-only rule it is **recorded and left alone** — no follow-up transaction.
 - **Grid caveat (why 3a + WS1.2 are the trustworthy evidence):** the `i2cdetect` grids mangled through the operator's paste and have a known quirk here — `i2cdetect` does not mark every bound device (`0x36`=live-AXP8191 printed `--` rather than `UU` because the driver-hold suppresses its quick-probe), and the columns shift in transit. The sysfs claimer list (3a) plus the `i2cget` EBUSY-vs-NAK split (WS1.2) are the reliable record; the sweep rows are used only to catch *new, previously-unclaimed* responders, of which there were none on the power-path buses.
 
-## Reaffirmed (not new, cited for the record)
+## Reaffirmed / collateral (cited for the record)
 
-- **`12-0014` gt9271 (touch) — unbound** (no `driver` symlink, no `/dev/input` touch event). DT `compatible = goodix,gt9271`; the module *is* registered and its match table includes `goodix,gt9271`, so this is an unbound-not-unsupported state — consistent with the missing INT/RST GPIO mapping noted in `touch-gt9271.md`. Out of power-path scope.
-- **`15-0051` hym8563 (RTC) — unbound** (no `driver` symlink; `/sys/class/rtc/` empty, no `rtc1`; no `/dev/rtc*`). DT `compatible = haoyu,hym8563`; the driver is compiled in (`CONFIG_RTC_DRV_HYM8563=y`). Out of power-path scope.
+Note: the touch (gt9271) and RTC (hym8563) bullets below were initially
+carried as "unbound, mechanism unknown." Their mechanisms were **resolved
+the same day** — both probes ran and failed because the chip is
+non-responsive on the wire — see the Evidence section for the verbatim boot
+log. The axp8191 and fusb302 bullets are pure reaffirmations.
+
+- **`12-0014` gt9271 (touch) — unbound** (no `driver` symlink, no `/dev/input` touch event). DT `compatible = goodix,gt9271`; the `goodix_ts` module *is* registered and its match table includes `goodix,gt9271`. **Mechanism subsequently resolved (operator boot log, see Evidence):** the probe ran and failed — the chip version-register read at `0x8140` returns −22 and the probe aborts — i.e. the chip is **non-responsive on the wire**, not a missing-driver/compatible/GPIO issue. Out of power-path scope.
+- **`15-0051` hym8563 (RTC) — unbound** (no `driver` symlink; `/sys/class/rtc/` empty, no `rtc1`; no `/dev/rtc*`). DT `compatible = haoyu,hym8563`; the driver is compiled in (`CONFIG_RTC_DRV_HYM8563=y`) and its match table includes that string. **Mechanism subsequently resolved (operator boot log, see Evidence):** the probe ran and failed (`could not init device, -22`) — the chip is **non-responsive on the wire**, not a missing-driver/compatible/DT issue. Out of power-path scope.
 - **`13-0036` axp8191** bound to `axp20x-i2c`; its child platform nodes include `axp2101-pek.0` (the PSK power key → `/sys/class/input/event0`) and `axp8191-temp-ctrl.0` (temp-ctrl enumerated but no hwmon/temp exposed, as `pmic-axp8191.md` records).
 - **`14-0022` fusb302** bound to `typec_fusb302`; its `power_supply` node is the idle `tcpm-source-psy-14-0022` (all zeros — HAT-powered config, as `usbc-power.md` records).
 
