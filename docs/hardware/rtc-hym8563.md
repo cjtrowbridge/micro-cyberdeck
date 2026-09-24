@@ -27,11 +27,17 @@ battery-powered SBC.
   DT node (`rtc@51` on `twi@7085000`) is `status=okay` and carries
   `clock-output-names`, and its compatible is **`haoyu,hym8563`** — a
   vendor/Armbian compatibility string (the mainline binding uses
-  `hymitsu,hy8563`; the Armbian tree documents `haoyu,hym8563`), which the
-  vendor kernel's built-in driver evidently accepts. So: driver present +
-  node okay → the non-bind is a **probe-time issue, not a
-  missing-driver or disabled-node issue**; the operator's `dmesg`
-  (root-only) is the next evidence.
+  `hymitsu,hy8563`; the Armbian tree documents `haoyu,hym8563`). The
+  `/boot/Image` strings confirm `haoyu,hym8563` is in the vendor kernel's
+  hym8563 match table, so the compatible **does** match.
+- **Boot-log evidence (2026-09-23, operator):** `sudo dmesg |
+  grep -iE 'gt9271|hym8563'` returned **zero lines**. For the RTC this is
+  a valid observation — the driver logs as `hym8563 15-0051: …` and the
+  grep pattern catches that. Zero lines therefore means either (a) the
+  ring buffer (~12.5 h uptime) wrapped past the boot-time probe messages,
+  or (b) the probe never ran. **Remaining open question:** the exact probe
+  failure or deferral — check `grep -iE 'hym8563|15-0051' /var/log/kern.log`
+  (world-readable, full boot log on Armbian) to settle it.
 
 ## How we know
 
@@ -55,8 +61,13 @@ battery-powered SBC.
     `hymitsu,hy8563`; `haoyu,hym8563` appears in the Armbian/repo tree,
     including a linux-rockchip binding doc);
   - net: driver present + node okay + compatible matched by this vendor
-    kernel → the non-bind is a **probe-time issue**; next evidence is the
-    operator-level boot log (`dmesg`, root-only on this board). Journal:
+    kernel → the non-bind is a **probe-time issue**;
+  - **operator `dmesg` (2026-09-23):** `sudo dmesg | grep -iE 'gt9271|hym8563'`
+    → **zero lines** — for the RTC chip (which logs as `hym8563 15-0051: …`)
+    this means either the ring buffer (~12.5 h uptime) wrapped past the
+    boot-time probe messages, or the probe never ran; the full boot log
+    (`/var/log/kern.log`, world-readable) is the definitive next evidence.
+    Journal:
     [2026-09-23-power-path-ws1-ic-identification.md](../../journal/2026-09-23-power-path-ws1-ic-identification.md).
 
 ## What it portends
