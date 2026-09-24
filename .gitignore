@@ -1,6 +1,11 @@
 # Local working notes (chat transcript; not for the repository)
 docs/xfce-freeze-diagnosis.md
 
+# External, board-clone dependencies (cloned at bring-up, never tracked —
+# projects/voice-agent/docs/design.md §9; ebe-boilerplate is "your
+# boilerplate", whisper.cpp is the pinned submodule third_party/whisper.cpp)
+/ebe-boilerplate/
+
 # Local pipeline configuration and runtime evidence (host)
 api.yaml
 state/

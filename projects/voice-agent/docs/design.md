@@ -143,10 +143,11 @@ surface.
 - **Streaming is non-negotiable for UX**: tokens land on the HUD while the
   answer is still generating; the TTS pipeline reads the *complete* answer
   (see §7 — we do not half-speak a sentence).
-- **Disk note:** qwen3.5:4b (3.4 GB) is already on the board. The 6.59 GB
-  **qwen3.5:9b is the obvious prune candidate** to make room for
-  whisper-medium + toolchain (~2.5 GiB free today). *Operator decision — recorded
-  here, not executed by this design.*
+- **Disk note:** qwen3.5:4b (**3.16 GB** on disk per `/api/tags`) is the model.
+  The 9.7B **qwen3.5:9b (6.14 GB)** that crowded the 2.5 GiB-free root is **pruned
+  (2026-09-23, operator decision, executed)** — root FS now **8.6 G free (71%)**,
+  comfortably holding whisper-medium + toolchain. See the gate plan G1-a and
+  [journal: 2026-09-23 voice-agent G1-a prune](../../journal/2026-09-23-voice-agent-g1a-9b-prune.md).
 
 ## 7. TTS + speaker
 
@@ -195,7 +196,7 @@ Go **1.24.4** is present; if ebe-boilerplate's `go.mod` demands newer Go,
 ## 10. Open decisions (owner · status)
 
 1. **Which mic** (A/B/C, §4) — *operator · open, G0 decides with evidence*
-2. **Prune qwen3.5:9b to make disk room?** — *operator · open*
+2. **Prune qwen3.5:9b to make disk room?** — *operator · **closed 2026-09-23: yes, pruned** (6.14 G freed; root FS 2.5 G → 8.6 G free, 92% → 71%)*
 3. **Sidecar process vs in-app goroutine** (§2) — *design · leaning sidecar, not locked*
 4. **whisper-medium vs smaller if G2 shows >~2×RTS** (§5) — *design · deferred until measured*
 5. **HUD layout** (960×960, but the panel shows the downscaled 240×240 — legibility budget) — *design · deferred to G3; the ST7789 bridge record is the constraint*

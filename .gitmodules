@@ -4,3 +4,6 @@
 [submodule "third_party/a733_npu_driver"]
 	path = third_party/a733_npu_driver
 	url = https://github.com/petayyyy/a733_npu_driver/
+[submodule "third_party/whisper.cpp"]
+	path = third_party/whisper.cpp
+	url = https://github.com/ggerganov/whisper.cpp
