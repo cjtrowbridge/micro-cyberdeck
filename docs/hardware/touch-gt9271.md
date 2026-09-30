@@ -97,8 +97,10 @@ bound.
     [2026-09-23-power-path-ws1-ic-identification.md](../../journal/2026-09-23-power-path-ws1-ic-identification.md).
 - The HAT vendor's GamePi13 wiring reference describes the I2C +
   INT/RST-GPIO topology generally, but the pin assignment for *this* board
-  needs the schematic (or the `button-map.py` run — the same unknown is the
-  gating item for [membrane-buttons.md](membrane-buttons.md)).
+  needs the schematic (the `button-map.py` run once named as a candidate source
+  for the HAT pin assignments was the membrane-keypad probe — closed
+  2026-09-23, see [membrane-buttons.md](membrane-buttons.md); the touch IC's
+  pin identity stays open with the power-path WS1 session).
 
 ## What it portends
 
