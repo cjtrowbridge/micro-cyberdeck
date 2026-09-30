@@ -1,10 +1,14 @@
 # Voice Agent (push-to-talk runtime)
 
-> Status: **Gates in progress** — G0 decided (Option A, USB mic via OTG;
-> hardware proof pending), G1 underway (9b pruned, whisper.cpp v1.9.4 pinned,
-> medium weights on board; apt batch + build + units remain). This project
-> owns the "voice-interactive local agent software" item from the top-level
+> Status: **Gates in progress** (2026-09-29 checkpoint) — G0 decided (Option
+> A, USB mic via OTG; hardware proof pending); G1: 9b pruned, whisper.cpp
+> v1.9.4 pinned + **server built**, medium weights staged — but the **system
+> unit is not installed, the Ollama pin was lost in the 09-23 unclean reboot
+> and never re-established, and the clean sweep is invalidated** (open end:
+> two operator installs, re-pin, controlled sweep). This project owns the
+> "voice-interactive local agent software" item from the top-level
 > [Known Unresolved Issues](../../README.md#known-unresolved-issues) list.
+> 2026-09-29 evidence: [journal/2026-09-29-voice-agent-g1-status-checkpoint.md](../../journal/2026-09-29-voice-agent-g1-status-checkpoint.md).
 
 A push-to-talk voice agent for the deck: **hold the left bumper → talk →
 release → the resident local LLM answers out loud**, with a full-screen
@@ -47,9 +51,10 @@ RAM** so the round trip has no model-load latency:
   (71 %)**; [journal/2026-09-23-voice-agent-g1a-9b-prune.md](../../journal/2026-09-23-voice-agent-g1a-9b-prune.md)
 - **No GPU path** to the `:1` desktop (no Mali/panfrost kernel driver): the HUD
   renders under llvmpipe — fine for a text HUD, sized accordingly
-- **Build toolchain**: `make` + Go 1.24.4 present on the board;
-  `cmake`/`g++`/`pkg-config` still missing — one apt batch (operator, sudo)
-  is the last G1-b step before anything compiles
+- **Build toolchain landed 2026-09-23**: operator apt batch put cmake
+  3.31.6 / g++ 14.2.0 / pkg-config 1.8.1 on the board (ALSA dev already
+  present); the `whisper-server` build succeeded at
+  `third_party/whisper.cpp/build/bin/` (Release, `-march=native`)
 
 Gates G0–G3 in docs/design.md must be green (in order) before this project is
 "running" rather than "designed"; the first green round trip also flips the

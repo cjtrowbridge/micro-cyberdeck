@@ -4,7 +4,7 @@ title: Voice agent — run the gates (G0 mic → G1 resident → G2 chain → G3
 summary: Gate execution for projects/voice-agent per the design's G0-G3 plan. G0 = identify + prove the audio input path (2026-09-23 probes: the only ALSA capture subdevice is a dead-end HDMI-Rx codec — bit-exact silence — so Option A, USB mic via OTG, is the declared path; hardware proof pending). G1 = provisioning batch + whisper.cpp vendoring + both models resident + the RAM numbers logged. G2 = the headless shell chain with per-stage wall times. G3 = the ebe app push-to-talk round trip on :1.
 status: current
 created_at: 2026-09-23-22-57-17
-revised: 2026-09-23
+revised: 2026-09-29
 ---
 
 Key: `[ ]` pending task, `[x]` completed task, `[?]` needs validation, `[-]` closed task
@@ -20,6 +20,23 @@ Standing rules in force for every task: hardware findings update the relevant
 `docs/hardware/` record + README row in the same change (standing rule);
 evidence goes to `journal/`; nothing destructive (model deletion, service
 changes) runs without the operator checkpoint it names.
+
+## Status checkpoint — 2026-09-29 (operator snapshot + live probe)
+
+Six-day gap with no work landed. Probed state 2026-09-29 ~21:30 local:
+board clean for **6 days (no further unclean power event** after the 09-23
+cluster — weak, not conclusive, against a flaky supply); **Ollama container
+up but empty** (`/api/ps` → `[]` — the pin was *not* re-established on 09-23
+as the "in flight" notes claimed); **whisper assets intact but the system
+unit not installed** (repo file ready, :8086 free); **`gamepi-buttons`
+disabled + inactive = the PTT key path is dead** (no enablement symlink;
+the X side on `:1` still healthy — restore is a one-liner + re-map owed on
+the replacement HAT); the clean sweep is still invalidated. A **replacement
+HAT is in transit** (defective-keys hypothesis for the 3 parked pins +
+the pin-5/PEK question). Next moves, in order: two operator sudo installs
+(unit + buttons) → re-pin + the ≥10 min idle check → controlled clean
+sweep + the design §5 small-vs-medium decision → G2 → G3. Full evidence:
+[journal/2026-09-29-voice-agent-g1-status-checkpoint.md](../../journal/2026-09-29-voice-agent-g1-status-checkpoint.md).
 
 ## G0 — the mic (design §4, §8)
 
@@ -98,7 +115,8 @@ audio.
   mechanism proven (pin `expires_at` year 2319, 3.66 G size in `/api/ps`);
   **pins are in-process — every container restart/reboot loses them and a
   re-pin request is required**; the 2026-09-23 23:35 reboot lost the pin
-  and it was re-established. Two more lessons locked in: requests to the
+  and it was **not** re-established (2026-09-29 probe: `/api/ps` empty — the
+  09-23 "re-established" note was premature). Two more lessons locked in: requests to the
   thinking-family `qwen3.5` **must carry `"think": false`** (a no-think
   request spun a 12 m 50 s runaway thinking block that had to be killed via
   `docker restart ollama`), and the ≥10 min idle check is still owed.

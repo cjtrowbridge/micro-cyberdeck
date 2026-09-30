@@ -3,6 +3,17 @@
 > Status: **In progress** (mirrors the README table) — 9 of 13 keys live via a
 > userspace daemon; 3 parked pending a physical re-test, 1 suspected fused to
 > the PMIC power-key input.
+>
+> **2026-09-29:** the daemon (`gamepi-buttons.service`) is **disabled and
+> inactive** — unit file on disk, no enablement symlink, no process — so
+> **no membrane key, including the left bumper (PL2 → `Control_L`), currently
+> injects any event**. The X side is still healthy (probed: `:1` opens,
+> `xtest_fake_input` bound), so restore is `sudo systemctl enable --now
+> gamepi-buttons` (the daemon runs as root — operator step). The deck is
+> awaiting a **replacement HAT** (defective-keys hypothesis for the 3 parked
+> pins + the pin-5 question): the 9-key table is old-HAT evidence and owes a
+> full re-map when the swap lands. See
+> [journal/2026-09-29-voice-agent-g1-status-checkpoint.md](../../journal/2026-09-29-voice-agent-g1-status-checkpoint.md).
 
 ## What it is
 
