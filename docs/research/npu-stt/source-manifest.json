@@ -1,0 +1,640 @@
+{
+  "fetched_at_utc": "2026-10-17T03:24:24.115762+00:00",
+  "purpose": "Read-only source snapshots; not installed or validated runtime dependencies",
+  "repositories": {
+    "sherpa-onnx": {
+      "repository": "k2-fsa/sherpa-onnx",
+      "revision": "11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf",
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0",
+        "url": "https://api.github.com/licenses/apache-2.0",
+        "node_id": "MDc6TGljZW5zZTI="
+      },
+      "branch_at_fetch": "master",
+      "selected_tag": "v1.13.8"
+    },
+    "sherpa-docs": {
+      "repository": "k2-fsa/sherpa",
+      "revision": "c02f72ca1540163a54019e845127fa52d5de175b",
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0",
+        "url": "https://api.github.com/licenses/apache-2.0",
+        "node_id": "MDc6TGljZW5zZTI="
+      },
+      "branch_at_fetch": "master"
+    },
+    "vosk-api": {
+      "repository": "alphacep/vosk-api",
+      "revision": "4ab9821510b488efb7740094714a130bd3545e90",
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0",
+        "url": "https://api.github.com/licenses/apache-2.0",
+        "node_id": "MDc6TGljZW5zZTI="
+      },
+      "branch_at_fetch": "master"
+    },
+    "ibus": {
+      "repository": "ibus/ibus",
+      "revision": "d464316d9b9613005c5573a010fec7f9b40b93b6",
+      "license": {
+        "key": "lgpl-2.1",
+        "name": "GNU Lesser General Public License v2.1",
+        "spdx_id": "LGPL-2.1",
+        "url": "https://api.github.com/licenses/lgpl-2.1",
+        "node_id": "MDc6TGljZW5zZTEx"
+      },
+      "branch_at_fetch": "main"
+    },
+    "ai-sdk": {
+      "repository": "ZIFENG278/ai-sdk",
+      "revision": "fc90006d0f6569da2f6726c2d8395877686f5aca",
+      "license": null,
+      "branch_at_fetch": "main"
+    },
+    "npu-prior": {
+      "repository": "petayyyy/a733_npu_driver",
+      "revision": "aae9287f6d0de4af2f3e253343c58a78e2f3d04f",
+      "license": "MIT",
+      "source": "host gitlink"
+    },
+    "ibus-sherpa-reference": {
+      "repository": "roojs/ibus-sherpa-onnx",
+      "revision": "e3d7df010dbaee3f1f03643f53ec47b370cd09ff",
+      "license": null,
+      "role": "optional reference, not selected or installed"
+    }
+  },
+  "files": [
+    {
+      "path": "sources/sherpa-docs/LICENSE",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa/c02f72ca1540163a54019e845127fa52d5de175b/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    {
+      "path": "sources/sherpa-docs/docs/source/onnx/install/arm-embedded-linux.rst",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa/c02f72ca1540163a54019e845127fa52d5de175b/docs/source/onnx/install/arm-embedded-linux.rst",
+      "sha256": "6747e686a1da9a8696b0703baf7f3b7ab31f6c56c728e3b748b210e1153aee0c",
+      "bytes": 12262
+    },
+    {
+      "path": "sources/sherpa-docs/docs/source/onnx/pretrained_models/online-transducer/zipformer-transducer-models.rst",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa/c02f72ca1540163a54019e845127fa52d5de175b/docs/source/onnx/pretrained_models/online-transducer/zipformer-transducer-models.rst",
+      "sha256": "3fa4142b34816710bb12de815c31c3a9c2faaa3771bea40581d1c4a4fd3f5f67",
+      "bytes": 64321
+    },
+    {
+      "path": "sources/vosk-api/COPYING",
+      "url": "https://raw.githubusercontent.com/alphacep/vosk-api/4ab9821510b488efb7740094714a130bd3545e90/COPYING",
+      "sha256": "bb618af833c817ab01c1564bd3ec75ba4b4f9cf30910a4a2168e30a674ee8cc6",
+      "bytes": 10173
+    },
+    {
+      "path": "sources/vosk-api/python/example/test_microphone.py",
+      "url": "https://raw.githubusercontent.com/alphacep/vosk-api/4ab9821510b488efb7740094714a130bd3545e90/python/example/test_microphone.py",
+      "sha256": "7eee87eceae37087f0f6662c0048f4c44c75b785d6163eeb8cc27c12bf7cd077",
+      "bytes": 2822
+    },
+    {
+      "path": "sources/vosk-api/python/example/test_simple.py",
+      "url": "https://raw.githubusercontent.com/alphacep/vosk-api/4ab9821510b488efb7740094714a130bd3545e90/python/example/test_simple.py",
+      "sha256": "7350769c39373558b9c2f6db5669b7a6ad1e5dbd1a5181c866f2388292c50b33",
+      "bytes": 834
+    },
+    {
+      "path": "sources/vosk-api/python/vosk/__init__.py",
+      "url": "https://raw.githubusercontent.com/alphacep/vosk-api/4ab9821510b488efb7740094714a130bd3545e90/python/vosk/__init__.py",
+      "sha256": "715f299249f78a24c2bc30dad7a9d6ff76f8ccace82368b9debca0c0bf849a7b",
+      "bytes": 10855
+    },
+    {
+      "path": "sources/vosk-api/src/vosk_api.h",
+      "url": "https://raw.githubusercontent.com/alphacep/vosk-api/4ab9821510b488efb7740094714a130bd3545e90/src/vosk_api.h",
+      "sha256": "f82f553a38fbff84a5731fbf086215f107e301a27daad0f038459781dc4a2adc",
+      "bytes": 13685
+    },
+    {
+      "path": "sources/ibus/COPYING",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/COPYING",
+      "sha256": "5df07007198989c622f5d41de8d703e7bef3d0e79d62e24332ee739a452af62a",
+      "bytes": 26436
+    },
+    {
+      "path": "sources/ibus/src/ibusengine.h",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/src/ibusengine.h",
+      "sha256": "2bf06bacd84f38c2e5bb38b43fd7f5760b568f9d8a8ca3c58da3ee62566f4c81",
+      "bytes": 17939
+    },
+    {
+      "path": "sources/ibus/src/ibusengine.c",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/src/ibusengine.c",
+      "sha256": "d0d484a3d7fdea77ed34549de3ad5e0a363a13e119641dcc42ab4cfd8704f057",
+      "bytes": 81854
+    },
+    {
+      "path": "sources/ibus/src/ibustypes.h",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/src/ibustypes.h",
+      "sha256": "9f3412368f3df892c6b4cc424333453c58db2d3a258ed1691e006aefeb8e896f",
+      "bytes": 15282
+    },
+    {
+      "path": "sources/ibus/src/ibusinputcontext.c",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/src/ibusinputcontext.c",
+      "sha256": "7eceed98c5801e421a28a653233ca3ff9c0c96704b28cf421edc4ccda8e299a5",
+      "bytes": 63992
+    },
+    {
+      "path": "sources/ibus/client/x11/main.c",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/client/x11/main.c",
+      "sha256": "480aaa6897bc727243dcef576df9662afbd62eb4b0f3b9a362f7b4c051938a55",
+      "bytes": 44459
+    },
+    {
+      "path": "sources/ibus/bus/inputcontext.c",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/bus/inputcontext.c",
+      "sha256": "cb4abf3e511dc114bc467588c4f8b047cb906282d20939be0c6a3e94af79b305",
+      "bytes": 130216
+    },
+    {
+      "path": "sources/ai-sdk/scripts/pegasus_setup.sh",
+      "url": "https://raw.githubusercontent.com/ZIFENG278/ai-sdk/fc90006d0f6569da2f6726c2d8395877686f5aca/scripts/pegasus_setup.sh",
+      "sha256": "0913143fc559f3ad8c7ba9f0a042881d5a2d5bed1d328fa9100b57d9047ccea1",
+      "bytes": 413
+    },
+    {
+      "path": "sources/ai-sdk/scripts/pegasus_import.sh",
+      "url": "https://raw.githubusercontent.com/ZIFENG278/ai-sdk/fc90006d0f6569da2f6726c2d8395877686f5aca/scripts/pegasus_import.sh",
+      "sha256": "9e1d6634251c274f7d556619d6730d78c64d8fe97623a9ed4b408f6a0ab3eb94",
+      "bytes": 6170
+    },
+    {
+      "path": "sources/ai-sdk/scripts/pegasus_quantize.sh",
+      "url": "https://raw.githubusercontent.com/ZIFENG278/ai-sdk/fc90006d0f6569da2f6726c2d8395877686f5aca/scripts/pegasus_quantize.sh",
+      "sha256": "62a9b61ca0963a9277dc8d2888d48599a73c61e343a7522b2502b123634f0df3",
+      "bytes": 2197
+    },
+    {
+      "path": "sources/ai-sdk/scripts/pegasus_inference.sh",
+      "url": "https://raw.githubusercontent.com/ZIFENG278/ai-sdk/fc90006d0f6569da2f6726c2d8395877686f5aca/scripts/pegasus_inference.sh",
+      "sha256": "b17e6cb63135916f5c2c906b6de6b16bebb18f3abca3aa83f9971ef92f8ada08",
+      "bytes": 2847
+    },
+    {
+      "path": "sources/ai-sdk/scripts/pegasus_export_ovx_nbg.sh",
+      "url": "https://raw.githubusercontent.com/ZIFENG278/ai-sdk/fc90006d0f6569da2f6726c2d8395877686f5aca/scripts/pegasus_export_ovx_nbg.sh",
+      "sha256": "7367f52e23d2e3731142a5f3fdace91fcd5abc0a71e5691008c527e64cf3e314",
+      "bytes": 2770
+    },
+    {
+      "path": "sources/ai-sdk/examples/vpm_run/vpm_run.c",
+      "url": "https://raw.githubusercontent.com/ZIFENG278/ai-sdk/fc90006d0f6569da2f6726c2d8395877686f5aca/examples/vpm_run/vpm_run.c",
+      "sha256": "b97f1ada998ce5b2261ae1e3adbbf19960d047dfd7dc2606130abbde5512ae71",
+      "bytes": 85357
+    },
+    {
+      "path": "sources/ai-sdk/examples/vpm_run/Makefile",
+      "url": "https://raw.githubusercontent.com/ZIFENG278/ai-sdk/fc90006d0f6569da2f6726c2d8395877686f5aca/examples/vpm_run/Makefile",
+      "sha256": "2d95f64d778c1fe48999c6c813e5d596dc554e39cc65026910f1c8626b128139",
+      "bytes": 1413
+    },
+    {
+      "path": "sources/sherpa-docs/docs/source/onnx/install/aarch64-embedded-linux.rst",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa/c02f72ca1540163a54019e845127fa52d5de175b/docs/source/onnx/install/aarch64-embedded-linux.rst",
+      "sha256": "f1a09870875531c156805c145cec943ca15cd7b590b593c390377545172ce633",
+      "bytes": 10938
+    },
+    {
+      "path": "sources/sherpa-docs/docs/source/onnx/install/linux.rst",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa/c02f72ca1540163a54019e845127fa52d5de175b/docs/source/onnx/install/linux.rst",
+      "sha256": "65dabd39a06cc1fad891cb3aae31f2de985b37c5ef897913bc5d19545d2c4a50",
+      "bytes": 3967
+    },
+    {
+      "path": "sources/sherpa-docs/docs/source/onnx/python/streaming-websocket-server.rst",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa/c02f72ca1540163a54019e845127fa52d5de175b/docs/source/onnx/python/streaming-websocket-server.rst",
+      "sha256": "a4f79d0bcff193cc48671b3c1f63b60bbf16e9662e12c2a98ed1e60fcd083665",
+      "bytes": 10717
+    },
+    {
+      "path": "sources/ibus/bindings/pygobject/Makefile.am",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/bindings/pygobject/Makefile.am",
+      "sha256": "bbe958b4db9f867dee8834f077bd9e7a8a3a1f3ac5054ce6e51b35a04be6cab5",
+      "bytes": 2081
+    },
+    {
+      "path": "sources/ibus/bindings/pygobject/gi/__init__.py",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/bindings/pygobject/gi/__init__.py",
+      "sha256": "bc56ce11a127c40e4097d43b92c57a39abb3f388f9c8e914094e21fe9a68609c",
+      "bytes": 969
+    },
+    {
+      "path": "sources/ibus/bindings/pygobject/gi/overrides/IBus.py",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/bindings/pygobject/gi/overrides/IBus.py",
+      "sha256": "bdcf67ac9aaac7d1162e69c8654373995dc8d6ea626f084162362a81b342c3e6",
+      "bytes": 8440
+    },
+    {
+      "path": "sources/ibus/bindings/pygobject/gi/overrides/__init__.py",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/bindings/pygobject/gi/overrides/__init__.py",
+      "sha256": "bc56ce11a127c40e4097d43b92c57a39abb3f388f9c8e914094e21fe9a68609c",
+      "bytes": 969
+    },
+    {
+      "path": "sources/ibus/bindings/pygobject/meson.build",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/bindings/pygobject/meson.build",
+      "sha256": "813ed28107c97e0f880faff329a74939140e621802da52b406f3ac49a9e942c5",
+      "bytes": 883
+    },
+    {
+      "path": "sources/ibus/bindings/pygobject/test-deserialize.py",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/bindings/pygobject/test-deserialize.py",
+      "sha256": "4da07a71387a3b150316e3f59489ebce9a30ce81d9c15dc6cdaebd1bd556f23e",
+      "bytes": 5253
+    },
+    {
+      "path": "sources/ibus/bindings/pygobject/test-override-ibus.py",
+      "url": "https://raw.githubusercontent.com/ibus/ibus/d464316d9b9613005c5573a010fec7f9b40b93b6/bindings/pygobject/test-override-ibus.py",
+      "sha256": "49e2f71b3bbeff416a2ed849f043765ad0525f71fa689522f05ac29b5f911b6d",
+      "bytes": 4874
+    },
+    {
+      "path": "sources/ai-sdk/viplite-tina/Makefile",
+      "url": "https://raw.githubusercontent.com/ZIFENG278/ai-sdk/fc90006d0f6569da2f6726c2d8395877686f5aca/viplite-tina/Makefile",
+      "sha256": "68a38cac0234a684718a853aa4fdf36a7acbe9b44e4bbf2a4f0b6469b47cedcb",
+      "bytes": 375
+    },
+    {
+      "path": "sources/ai-sdk/viplite-tina/lib/glibc-gcc13_2_0/v2.0/inc/vip_lite.h",
+      "url": "https://raw.githubusercontent.com/ZIFENG278/ai-sdk/fc90006d0f6569da2f6726c2d8395877686f5aca/viplite-tina/lib/glibc-gcc13_2_0/v2.0/inc/vip_lite.h",
+      "sha256": "33fee8f985210cb34f14b7e2b0614096e6972718f87d8107497521d561d9df41",
+      "bytes": 44351
+    },
+    {
+      "path": "sources/sherpa-onnx/LICENSE",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    {
+      "path": "sources/sherpa-onnx/README.md",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/README.md",
+      "sha256": "8fa218670f33f12a2b18b1415a4c70497918587218dde163934249447f3270e8",
+      "bytes": 53127
+    },
+    {
+      "path": "sources/sherpa-onnx/python-api-examples/speech-recognition-from-microphone.py",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/python-api-examples/speech-recognition-from-microphone.py",
+      "sha256": "12fbb02bbf1605e05845fe90e2c5df47222d4e70451c9d63eebb765daa5ea8be",
+      "bytes": 5613
+    },
+    {
+      "path": "sources/sherpa-onnx/python-api-examples/speech-recognition-from-microphone-with-endpoint-detection.py",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/python-api-examples/speech-recognition-from-microphone-with-endpoint-detection.py",
+      "sha256": "9ba6d66b043e8aaa1b0550456a053231834dcda4e20ac876bb44f3925cda3baa",
+      "bytes": 5733
+    },
+    {
+      "path": "sources/sherpa-onnx/python-api-examples/online-decode-files.py",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/python-api-examples/online-decode-files.py",
+      "sha256": "2eaca0d1a51c3ded0728d44feb4d9c0da84a3bc81f987b84c6acb5b9b00ed696",
+      "bytes": 14621
+    },
+    {
+      "path": "sources/sherpa-onnx/sherpa-onnx/csrc/session.cc",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/sherpa-onnx/csrc/session.cc",
+      "sha256": "2ace7fcbc910ab41804ab93869c0eeceac8b0d416d6dbe76a4417c2b007a9e52",
+      "bytes": 21195
+    },
+    {
+      "path": "sources/sherpa-onnx/sherpa-onnx/csrc/online-stream.cc",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/sherpa-onnx/csrc/online-stream.cc",
+      "sha256": "c2b7d33398d1a1125a97fd2d62ea2eaf137dfa7b492ff0b3d9ac38f6322f0dee",
+      "bytes": 11508
+    },
+    {
+      "path": "sources/sherpa-onnx/sherpa-onnx/csrc/online-recognizer.cc",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/sherpa-onnx/csrc/online-recognizer.cc",
+      "sha256": "c872eb5cdf4f4e25b133e79cfd156343782f61a344efba7b3aef4a6f3d1e1b79",
+      "bytes": 8993
+    },
+    {
+      "path": "sources/sherpa-onnx/sherpa-onnx/csrc/online-recognizer.h",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/sherpa-onnx/csrc/online-recognizer.h",
+      "sha256": "382e6bcc6e26079419c0a0f972d89b6c48de5d9ecda49ceca592bd0786482836",
+      "bytes": 7939
+    },
+    {
+      "path": "sources/sherpa-onnx/sherpa-onnx/csrc/online-zipformer-transducer-model.cc",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/sherpa-onnx/csrc/online-zipformer-transducer-model.cc",
+      "sha256": "834477e5d5186afce4634fd9ec6229e7559e4d81654bf5d17bcc3e21eca3e235",
+      "bytes": 17442
+    },
+    {
+      "path": "sources/sherpa-onnx/sherpa-onnx/csrc/online-transducer-model.cc",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/sherpa-onnx/csrc/online-transducer-model.cc",
+      "sha256": "29ce22a34bae15a810b7e924b277304ab8aa83bcd3ba61409bf38883d7c38a55",
+      "bytes": 9444
+    },
+    {
+      "path": "sources/sherpa-onnx/sherpa-onnx/csrc/online-transducer-model.h",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/sherpa-onnx/csrc/online-transducer-model.h",
+      "sha256": "272a9a372fdce0cea02a10951ab6c5c4d00dc127a5a31a1afc1a6407f20d0a95",
+      "bytes": 5206
+    },
+    {
+      "path": "sources/sherpa-onnx/sherpa-onnx/csrc/online-transducer-greedy-search-decoder.cc",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/sherpa-onnx/csrc/online-transducer-greedy-search-decoder.cc",
+      "sha256": "7ff18438db5b944d94f6b1a84368cda7a93496fdd0a0c7948690b1db11055ac2",
+      "bytes": 5878
+    },
+    {
+      "path": "sources/sherpa-onnx/sherpa-onnx/c-api/c-api.h",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/sherpa-onnx/c-api/c-api.h",
+      "sha256": "2a1b95084be8fd1deb3228fcad2fd3f7f0258b64582f7402281ec174c7b7f4ce",
+      "bytes": 167657
+    },
+    {
+      "path": "sources/sherpa-onnx/sherpa-onnx/csrc/sherpa-onnx-alsa.cc",
+      "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf/sherpa-onnx/csrc/sherpa-onnx-alsa.cc",
+      "sha256": "f63072f250dc7d29b399c2863c2859fe12e36833e728824e916e7c7205cc59c1",
+      "bytes": 4238
+    },
+    {
+      "path": "sources/npu-prior/LICENSE",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/LICENSE",
+      "sha256": "012c0a77504e4ce8d1983f345936549681ffb861acbd2261f255e9cb5da2616e",
+      "bytes": 1085
+    },
+    {
+      "path": "sources/npu-prior/docs/import_chat.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/docs/import_chat.md",
+      "sha256": "a0d066192a26eff7581278d34aeea378c658db5a3e0957225aaba4a33574e4f6",
+      "bytes": 11444
+    },
+    {
+      "path": "sources/npu-prior/docs/roadmap.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/docs/roadmap.md",
+      "sha256": "6d913150b4e035b261c15554bfa19af90d3d8e43bcff332e258999c289dda82b",
+      "bytes": 3272
+    },
+    {
+      "path": "sources/npu-prior/docs/01-setup-host.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/docs/01-setup-host.md",
+      "sha256": "53e774bc825d9ae3b2957c7b7c60d3d538f69e2d47a97d9f659265e8e913c03f",
+      "bytes": 7807
+    },
+    {
+      "path": "sources/npu-prior/docs/02-board-bringup.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/docs/02-board-bringup.md",
+      "sha256": "7d54bc91f1e4d719b710da9641f019aca2d128dc1736572584ea6df27b0b22b7",
+      "bytes": 5097
+    },
+    {
+      "path": "sources/npu-prior/docs/RESULTS.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/docs/RESULTS.md",
+      "sha256": "5e1f1436411712d106ed5e1b28b97454cc88aa12d76a3aa244aa105a9a4922cc",
+      "bytes": 12470
+    },
+    {
+      "path": "sources/npu-prior/docs/blockers.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/docs/blockers.md",
+      "sha256": "86f9e783330c4842ed25eac30c3d5424aa69a884d25df1a14a1306021438d01f",
+      "bytes": 5851
+    },
+    {
+      "path": "sources/npu-prior/docs/08-known-limits-and-blockers.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/docs/08-known-limits-and-blockers.md",
+      "sha256": "a79daa807ea33e5ee1b3bc0013a857751c22681c7d863f3ebf38a2388cf2c54f",
+      "bytes": 6290
+    },
+    {
+      "path": "sources/npu-prior/docs/vendor-tickets.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/docs/vendor-tickets.md",
+      "sha256": "5b899014cb48d72fea37f5c86dcee2cfc965f77c9a2875b6c83c37a44b9f6c6f",
+      "bytes": 7170
+    },
+    {
+      "path": "sources/npu-prior/docs/07-porting-radxa-to-orangepi.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/docs/07-porting-radxa-to-orangepi.md",
+      "sha256": "fc6efd83d6400eacadacfe3070aa47b7e1949fed82a4db500d5ab04faeff1464",
+      "bytes": 3989
+    },
+    {
+      "path": "sources/npu-prior/reports/g2-acuity-lenet.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/reports/g2-acuity-lenet.md",
+      "sha256": "4c2225d6d8588c0885c8d5744763a8a7eb85f94cac3069886ef0500cb66c8d04",
+      "bytes": 2605
+    },
+    {
+      "path": "sources/npu-prior/reports/g2-acuity-inception-v1.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/reports/g2-acuity-inception-v1.md",
+      "sha256": "6eac8b02c2dd45945783ad83000f85d5ef220151b0f2ee7a3452da4de4271aee",
+      "bytes": 5173
+    },
+    {
+      "path": "sources/npu-prior/reports/t1-persistent-runner.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/reports/t1-persistent-runner.md",
+      "sha256": "cbbf28345ff263594fb89d96afbfad81bb1bf0705d88c654b92a0d6f53178145",
+      "bytes": 5895
+    },
+    {
+      "path": "sources/npu-prior/reports/v2d-vlm-npu-mmproj-glue.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/reports/v2d-vlm-npu-mmproj-glue.md",
+      "sha256": "b2a44236fcff8ef3161625f6c1017ce5cd0a24f2e64698444e9b3d7cb91b2f77",
+      "bytes": 5182
+    },
+    {
+      "path": "sources/npu-prior/reports/v2b-smolvlm-vision-npu-retry.md",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/reports/v2b-smolvlm-vision-npu-retry.md",
+      "sha256": "4bd79ab450b8923adb44bd69903fe8450ff259f4994d837a4bed7f5c57d19880",
+      "bytes": 4205
+    },
+    {
+      "path": "sources/npu-prior/scripts/host/convert_onnx_to_nbg.sh",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/scripts/host/convert_onnx_to_nbg.sh",
+      "sha256": "7e666a0a2e922257240a165dc5efca60907569019694cbb4d561bb4656682c7e",
+      "bytes": 17848
+    },
+    {
+      "path": "sources/npu-prior/scripts/host/compare_outputs.py",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/scripts/host/compare_outputs.py",
+      "sha256": "31224df4adbe36cf47b5fc616a8d11af1702514e47fac68cdee522c7d5791175",
+      "bytes": 3781
+    },
+    {
+      "path": "sources/npu-prior/scripts/host/prepare-workspace.ps1",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/scripts/host/prepare-workspace.ps1",
+      "sha256": "92fe6ec083a6fbcd27baaca11c233de56e0eab7862149fa8a68ae52bd4d72f05",
+      "bytes": 2867
+    },
+    {
+      "path": "sources/npu-prior/scripts/board/a733-g0-g1-smoke.sh",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/scripts/board/a733-g0-g1-smoke.sh",
+      "sha256": "d6e08da3965634a8124b8634d12a400570862419d60b322e55b636b4401a2a75",
+      "bytes": 6646
+    },
+    {
+      "path": "sources/npu-prior/scripts/board/build-ai-sdk.sh",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/scripts/board/build-ai-sdk.sh",
+      "sha256": "9f9dcaf75d5c631b0b40b391af4e554f747883233c8e9bdfe9a5ed6ea79260a9",
+      "bytes": 1486
+    },
+    {
+      "path": "sources/npu-prior/scripts/board/build-npu-lm-runner.sh",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/scripts/board/build-npu-lm-runner.sh",
+      "sha256": "382fd4631db7e86012c4539dbf097179efaae4ada87425957c61685806a39ebc",
+      "bytes": 2830
+    },
+    {
+      "path": "sources/npu-prior/scripts/board/npu_lm_runner.c",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/scripts/board/npu_lm_runner.c",
+      "sha256": "4f08b83dc615ce74b64473933adfb64509144d0580a38a70ad4559dc43607175",
+      "bytes": 31040
+    },
+    {
+      "path": "sources/npu-prior/scripts/board/npu_full_chain_runner.c",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/scripts/board/npu_full_chain_runner.c",
+      "sha256": "ab570bca21ca47c3b855bee342a0d4d3f66549ebded154981c3ebbc25ad19280",
+      "bytes": 15972
+    },
+    {
+      "path": "sources/npu-prior/scripts/board/run-v2d-vision.sh",
+      "url": "https://raw.githubusercontent.com/petayyyy/a733_npu_driver/aae9287f6d0de4af2f3e253343c58a78e2f3d04f/scripts/board/run-v2d-vision.sh",
+      "sha256": "dff8f26c59a8b84aca6d4c172bcc24d4a8753f83ae92f1fe9f1842da13a20f5e",
+      "bytes": 2024
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/BUILD.md",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/BUILD.md",
+      "sha256": "21507208e146bb3bd3d0d6f220ddb92153a46d9970f7731afb420cd6ce391653",
+      "bytes": 5724
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/README.md",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/README.md",
+      "sha256": "ad4a0b3ba1617f74c2ebe37a259270fab44f79acd63a17ca6c79f7099e08b5f2",
+      "bytes": 3465
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/meson.build",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/meson.build",
+      "sha256": "9fbe199ad9dc248f21940b5321e94fb480b2ff3dc8dbc447772e9263abb7f9ed",
+      "bytes": 7249
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/Application.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/Application.vala",
+      "sha256": "f270996565e4a1c3dd80810ed2e5b646c8b44c2dd7a02f7e43769992cc6f13de",
+      "bytes": 7532
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/Capture.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/Capture.vala",
+      "sha256": "7e230c0983c46e30619e919b81ae9bc832548b4cb4e5601f30e61942cbc0f536",
+      "bytes": 5932
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/Engine.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/Engine.vala",
+      "sha256": "7d036b8ccae5718bd2884448e913356b171dd7f010027d0581c38dd5e219e9fe",
+      "bytes": 22650
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/EngineStub.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/EngineStub.vala",
+      "sha256": "ab8d3a1cd61c3d428fbad9b99ad4799e0bf499919c681597279c12e09411519d",
+      "bytes": 1232
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/Transcriber.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/Transcriber.vala",
+      "sha256": "e9210f337150d07bb25e6cd43bcbb52b2fb75fdb434be8c414faf8290e792d9d",
+      "bytes": 17116
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/cli/Application.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/cli/Application.vala",
+      "sha256": "d8d79d0c13d02dee0b7513d457c799d3b468178d6cb5568164d9abb7b6c7e450",
+      "bytes": 19786
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/cli/main.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/cli/main.vala",
+      "sha256": "2fea20c6cc28b453a93a339eb2c576c8f94e66dc7dd8af17fe5a90e91d17ce6c",
+      "bytes": 210
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/gtk/main.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/gtk/main.vala",
+      "sha256": "3fe682feb4637aeef4918513d05ac659648ac416ce58b3fba188e83ee3e4b15d",
+      "bytes": 3581
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/main.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/main.vala",
+      "sha256": "826b8786c4be6580ab9b08b191036bb9db27b20d6e58d477aec5b9f801ec58e1",
+      "bytes": 512
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/setup/Application.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/setup/Application.vala",
+      "sha256": "dfc3d7be40294bfe65d2347ddefed53ad78b1ba03735bbd6ca0af3e85abfaec0",
+      "bytes": 3727
+    },
+    {
+      "path": "sources/ibus-sherpa-reference/src/setup/main.vala",
+      "url": "https://raw.githubusercontent.com/roojs/ibus-sherpa-onnx/e3d7df010dbaee3f1f03643f53ec47b370cd09ff/src/setup/main.vala",
+      "sha256": "fc22d49da4c156d0535c1a33f009fcebcee9bb71515e876f1b6de71ed21336dd",
+      "bytes": 247
+    }
+  ],
+  "discovery_notes": [
+    {
+      "repository": "k2-fsa/sherpa",
+      "path": "docs/source/onnx/python/streaming-asr-examples.rst",
+      "candidates": []
+    },
+    {
+      "repository": "ibus/ibus",
+      "path": "src/tests/ibus-engine-simple.c",
+      "candidates": []
+    },
+    {
+      "repository": "ZIFENG278/ai-sdk",
+      "path": "README.md",
+      "candidates": [
+        "examples/resnet50/README.md",
+        "models/README.md",
+        "scripts/README.md",
+        "examples/yolact/README.md",
+        "examples/multi_thread/README.md",
+        "examples/yolov5/README.md"
+      ]
+    },
+    {
+      "repository": "ZIFENG278/ai-sdk",
+      "path": "LICENSE",
+      "candidates": []
+    },
+    {
+      "repository": "ZIFENG278/ai-sdk",
+      "path": "Makefile",
+      "candidates": [
+        "examples/vpm_run/Makefile",
+        "unified-tina/Makefile",
+        "examples/yolact/Makefile",
+        "examples/multi_thread/Makefile",
+        "examples/lenet/Makefile",
+        "examples/yolov5/Makefile",
+        "viplite-tina/Makefile",
+        "examples/resnet50/Makefile"
+      ]
+    }
+  ]
+}

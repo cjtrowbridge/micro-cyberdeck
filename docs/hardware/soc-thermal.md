@@ -1,5 +1,13 @@
 # SoC temperature (CPU/DDR/GPU/NPU)
 
+Resource-budget correction (manufacturer literature, 2026-10-16): Allwinner
+specifies A733 as **2 Cortex-A76 + 6 Cortex-A55**, up to 2 GHz; see the
+[manufacturer specification](https://www.allwinnertech.com/index.php?a=index&c=product&id=139).
+Earlier voice notes describing eight A76s or four big cores must not guide
+thread affinity. Live CPU IDs, active frequencies and sustained cooling behavior
+still need probing. [Dictation resource analysis](../../journal/2026-10-16_dictation-resource-budget.md)
+records the scheduling implications; no new thermal measurement or status change.
+
 > Status: **Done** (mirrors the README table)
 
 ## What it is

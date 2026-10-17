@@ -65,6 +65,18 @@ left bumper is held. Distinct from the output chain, which is settled
 
 ## How we know
 
+Software integration research (2026-10-16; no new hardware probe):
+[search-free execution handoff](../research/npu-stt/README.md) now preserves
+capture/runtime prerequisites, partial-versus-final APIs, session-bus and
+trigger integration contracts. No new audio or recognition measurement.
+[resource/throughput analysis](../../journal/2026-10-16_dictation-resource-budget.md)
+adds capture-buffer arithmetic, example buffering caveats, and proposed
+audio-paced benchmark criteria; no recognition speed on this board is claimed.
+[streaming dictation checkpoint](../../journal/2026-10-16_streaming-dictation-research.md)
+compares online recognition and X11 input-method composition. USB signal capture
+is already evidenced below; recognition quality, live latency, and stable ALSA
+device selection remain unverified. Hardware status remains Partial.
+
 - Re-probe (all bare, no sudo), 2026-09-23 22:56 local:
 
   ```bash

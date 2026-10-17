@@ -1,0 +1,2 @@
+# The source manifest hashes exact upstream bytes, independent of checkout platform.
+sources/** -text

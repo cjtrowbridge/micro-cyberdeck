@@ -219,6 +219,19 @@ cat /proc/$(pgrep -f 'ollama serve' | head -1)/cgroup   # docker-*.scope (root)
 
 ## Exploration path — what needs to happen
 
+Planning checkpoint (2026-10-16): the proposed
+[NPU-first streaming dictation plan](../../plans/future/2026-10-16-20-17-37_npu-first-streaming-dictation.md)
+revalidates the historical demo, bounds compiler/STT-offload investigation, and
+then delivers dictation on CPU or a validated hybrid regardless of NPU outcome.
+Documentation preparation subsequently initialized that exact gitlink and
+reviewed its roadmap, reports and executable scripts. The
+[search-free handoff](../research/npu-stt/README.md) preserves local copies;
+[NPU guide](../research/npu-stt/npu.md) records stale module/build/CLI examples,
+the single-input/output limitation of the LLM runner, and the separate
+multi-tensor cache ABI required for streaming ASR. Static LLM KV-cache limits
+do not establish ASR cache incompatibility. No fresh board probe or new
+acceleration result is claimed; status remains In progress.
+
 Board state after G1: the **runtime is installed and proven**, but every
 model the deck would actually use must be *compiled for this NPU* first —
 the only green artifact on the board today is the SDK's v3 sample network

@@ -1,0 +1,12 @@
+# NPU-first STT: offline documentation preparation
+
+- Authority: operator requested a deep documentation dive, including the NPU work, because the executing harness will lack search.
+- Governing plan: `plans/future/2026-10-16-20-17-37_npu-first-streaming-dictation.md`, documentation items 0.1-0.3. Runtime/board tasks remain pending.
+- Initialized NPU and Whisper submodules at existing gitlinks `aae9287` and `927cfce`; no third-party pointer update. Read NPU import handoff, setup, roadmap, results, blockers, vendor tickets, G2/T1/V2d reports and actual converter/smoke/runner sources.
+- Authored `docs/research/npu-stt/README.md` plus acquisition, NPU, STT, insertion and validation guides. Preserved 87 source snapshots with immutable revisions/URLs and SHA-256 manifests, retaining available licenses. Added a standard-library-only, read-only packet verifier.
+- Corrected offline traps: vipcore versus sunxi_npu; SDK missing top-level Makefile; PowerShell docker-load redirection; comparison CLI/output filenames and success semantics; compiler workspace overwrites/ONNX sidecars; smoke false confidence; multi-input/output ASR caches versus the LLM runner's 1/1 ABI.
+- Vendor documentation now describes compiler image 2.0.10.2; pinned prior used 2.0.10.1/ACUITY 6.30.22. Recorded divergence without claiming interchangeability or downloading either image.
+- External roadmap reviewed alongside plan: LLM/vision milestones are not STT acceptance; V2 pending-unlock text is stale after V2d success. No host-wide roadmap exists. Plan now states these mismatches and the additive STT gates explicitly.
+- Packet distinguishes search-free documentation from air-gapped deployment: model weights, binary runtimes, wheel/deb dependency closures and compiler images are not included. Exact runtime/model metadata and staging instructions are local; absent compiler routes to CPU, absent CPU assets need staging.
+- New hardware research pointers added to NPU, mic and button records; no live findings or status changes. No setup.sh/provisioning code changed. No board probes, runtime installs, model downloads, commits or pushes.
+- Validation: 87 exact source snapshots (1,322,416 bytes) and 59 authored-guide local links pass. NPU copies use raw pinned Git blobs to avoid Windows newline changes; packet .gitattributes preserves source bytes. New plan metadata validates. Full index regeneration retains the three previously recorded filename blockers; regenerated the affected future index from validated entries without renaming unrelated plans.

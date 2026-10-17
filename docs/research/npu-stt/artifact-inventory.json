@@ -1,0 +1,320 @@
+{
+  "sherpa-runtime": {
+    "tag": "v1.13.8",
+    "release_url": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/v1.13.8",
+    "assets": [
+      {
+        "id": 556231275,
+        "name": "sherpa-onnx-native-lib-linux-aarch64-1.13.8.jar",
+        "size": 13224859,
+        "digest": "sha256:5123d2e48ae1a7ce82ba89ce153906c651bf418a63db2f7dff82265e6d49c104",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-native-lib-linux-aarch64-1.13.8.jar",
+        "updated_at": "2026-09-11T01:38:40Z"
+      },
+      {
+        "id": 555161223,
+        "name": "sherpa-onnx-v1.13.8-axcl-linux-aarch64-shared.tar.bz2",
+        "size": 30052538,
+        "digest": "sha256:7316f225a0550a6b9098e669680c04ecb3221bee8f09683613b189ffe171e5b4",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-axcl-linux-aarch64-shared.tar.bz2",
+        "updated_at": "2026-09-10T14:20:10Z"
+      },
+      {
+        "id": 555169894,
+        "name": "sherpa-onnx-v1.13.8-axera-ax620q-linux-aarch64-shared.tar.bz2",
+        "size": 27749550,
+        "digest": "sha256:20a38f75c934d7a70e44303da45104f5be309224e16994dd3eb66fb052aa4ccd",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-axera-ax620q-linux-aarch64-shared.tar.bz2",
+        "updated_at": "2026-09-10T14:26:05Z"
+      },
+      {
+        "id": 555194835,
+        "name": "sherpa-onnx-v1.13.8-axera-ax630c-linux-aarch64-shared.tar.bz2",
+        "size": 27750084,
+        "digest": "sha256:089150efaaa8a3a43a949e20befe4b6fb1251c1f75d147cc936e1c68ca6b251f",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-axera-ax630c-linux-aarch64-shared.tar.bz2",
+        "updated_at": "2026-09-10T14:40:54Z"
+      },
+      {
+        "id": 555164143,
+        "name": "sherpa-onnx-v1.13.8-axera-ax650-linux-aarch64-shared.tar.bz2",
+        "size": 27747492,
+        "digest": "sha256:a6e5322f6728918f6a002f66197a51a0cfba054ddb6f65a3303d4b3c255a5b95",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-axera-ax650-linux-aarch64-shared.tar.bz2",
+        "updated_at": "2026-09-10T14:22:25Z"
+      },
+      {
+        "id": 555154221,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-jni.tar.bz2",
+        "size": 12626110,
+        "digest": "sha256:202625952edeb9d549f544fd49d618f79abda49edcbbc7dbb4bb6ead06af8008",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-jni.tar.bz2",
+        "updated_at": "2026-09-10T14:15:29Z"
+      },
+      {
+        "id": 555165227,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-shared-cpu-lib.tar.bz2",
+        "size": 12595068,
+        "digest": "sha256:fb98b80628a383909bf83626daca2e0d0ffc93bf1f7d222eaaa4282b388f072f",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-cpu-lib.tar.bz2",
+        "updated_at": "2026-09-10T14:23:06Z"
+      },
+      {
+        "id": 555165172,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-shared-cpu.tar.bz2",
+        "size": 28091778,
+        "digest": "sha256:4e3734f82bc1379fd91f219f5869c7e9d03b7a4f7561907d8abca4849c51a789",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-cpu.tar.bz2",
+        "updated_at": "2026-09-10T14:23:05Z"
+      },
+      {
+        "id": 555160765,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.11.0-lib.tar.bz2",
+        "size": 20663794,
+        "digest": "sha256:24ffafa6c6aff8a38c60b1aae7c9f5efe83d47536d2b395d888de87a3996619d",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.11.0-lib.tar.bz2",
+        "updated_at": "2026-09-10T14:19:49Z"
+      },
+      {
+        "id": 555160709,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.11.0.tar.bz2",
+        "size": 35486296,
+        "digest": "sha256:70283d36e5b347788e3247014c22b247dbd04c12e6f47c77501c3e2547fdcbe0",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.11.0.tar.bz2",
+        "updated_at": "2026-09-10T14:19:47Z"
+      },
+      {
+        "id": 555206796,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.16.0-lib.tar.bz2",
+        "size": 41554864,
+        "digest": "sha256:e849e7ec6fa268af35a8bf61c66ca6f52c8697d7896a7334b6112efb9f7bcfb7",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.16.0-lib.tar.bz2",
+        "updated_at": "2026-09-10T14:48:29Z"
+      },
+      {
+        "id": 555206710,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.16.0.tar.bz2",
+        "size": 56554858,
+        "digest": "sha256:d541f79658f5169d1d50e76a34f4015d57f4c9c35a34f4e371aad0af9ee5652b",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.16.0.tar.bz2",
+        "updated_at": "2026-09-10T14:48:27Z"
+      },
+      {
+        "id": 555206857,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.18.0-lib.tar.bz2",
+        "size": 54351481,
+        "digest": "sha256:3d8bcd01a154466b31b58f826863b3d3f3d4bffa1961a3d8daa5ba408a1aa63a",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.18.0-lib.tar.bz2",
+        "updated_at": "2026-09-10T14:48:34Z"
+      },
+      {
+        "id": 555206761,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.18.0.tar.bz2",
+        "size": 69216049,
+        "digest": "sha256:d139498eb2e7a3d6113e2b47dad2aec7b926b728dd4d20dbc188c7e7583a0f3b",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.18.0.tar.bz2",
+        "updated_at": "2026-09-10T14:48:29Z"
+      },
+      {
+        "id": 555178367,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.18.1-lib.tar.bz2",
+        "size": 53504161,
+        "digest": "sha256:2fca50d5707d33e0f18bf5154ed75a450217485abf639c65ee831ebe05c257ae",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.18.1-lib.tar.bz2",
+        "updated_at": "2026-09-10T14:31:09Z"
+      },
+      {
+        "id": 555178236,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.18.1.tar.bz2",
+        "size": 68414362,
+        "digest": "sha256:bfb045486bac530976f2bff9bfbb88a96efad4c87a839cce334714e4c513bc5a",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-gpu-onnxruntime-1.18.1.tar.bz2",
+        "updated_at": "2026-09-10T14:31:07Z"
+      },
+      {
+        "id": 555205608,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-static-lib.tar.bz2",
+        "size": 21325380,
+        "digest": "sha256:77983e3cf29aa60f2e531d249dbd01d15596530550c8db2e9e02fc6a655da6bb",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-static-lib.tar.bz2",
+        "updated_at": "2026-09-10T14:47:40Z"
+      },
+      {
+        "id": 555205388,
+        "name": "sherpa-onnx-v1.13.8-linux-aarch64-static.tar.bz2",
+        "size": 357653027,
+        "digest": "sha256:d1c621ed68f2ff77738505ba0137b947141c27e431c12f266a6b4ba218e78a4e",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-static.tar.bz2",
+        "updated_at": "2026-09-10T14:47:38Z"
+      },
+      {
+        "id": 555158816,
+        "name": "sherpa-onnx-v1.13.8-rknn-linux-aarch64-shared.tar.bz2",
+        "size": 28250944,
+        "digest": "sha256:6fa85c2615feb5d3e501cbeee00f6f321720164ea50239683e7c37a3baea8353",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-rknn-linux-aarch64-shared.tar.bz2",
+        "updated_at": "2026-09-10T14:18:20Z"
+      },
+      {
+        "id": 555164535,
+        "name": "sherpa-onnx-v1.13.8-rknn-linux-aarch64-static.tar.bz2",
+        "size": 344453417,
+        "digest": "sha256:7f5b3a13b5553855d2f4d8d7da61b3c4e80f7bd172c6f1e9a49c6dae5fd3943d",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-rknn-linux-aarch64-static.tar.bz2",
+        "updated_at": "2026-09-10T14:22:50Z"
+      }
+    ]
+  },
+  "sherpa-models": {
+    "tag": "asr-models",
+    "release_url": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models",
+    "assets": [
+      {
+        "id": 143510207,
+        "name": "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17.tar.bz2",
+        "size": 127887156,
+        "digest": null,
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-20M-2023-02-17.tar.bz2",
+        "updated_at": "2024-01-03T02:39:33Z"
+      },
+      {
+        "id": 191971614,
+        "name": "sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2",
+        "size": 310414022,
+        "digest": null,
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2",
+        "updated_at": "2024-09-11T13:42:55Z"
+      },
+      {
+        "id": 340352463,
+        "name": "sherpa-onnx-nemotron-speech-streaming-en-0.6b-int8-2026-01-14.tar.bz2",
+        "size": 468994262,
+        "digest": "sha256:e4d001a058a6f736fa4f59accfd61bd03465fd2f8b4a8864079b2c3f86c74ac8",
+        "browser_download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-speech-streaming-en-0.6b-int8-2026-01-14.tar.bz2",
+        "updated_at": "2026-01-14T08:24:53Z"
+      }
+    ]
+  },
+  "zipformer-model": {
+    "repository": "desh2608/icefall-asr-librispeech-pruned-transducer-stateless7-streaming-small",
+    "revision": "be162ecc09bade73063a671fad9d18220149d25b",
+    "card_data": {
+      "license": "apache-2.0"
+    },
+    "files": [
+      ".gitattributes",
+      "README.md",
+      "data/lang_bpe_500/bpe.model",
+      "data/lang_bpe_500/tokens.txt",
+      "exp/cpu_jit.pt",
+      "exp/decoder_jit_trace.pt",
+      "exp/encoder_jit_trace.pt",
+      "exp/export.sh",
+      "exp/jit_trace_export.sh",
+      "exp/joiner_jit_trace.pt",
+      "exp/pretrained.pt",
+      "exp/tensorboard/events.out.tfevents.1675637915.r7n07.429298.0",
+      "exp/tensorboard/events.out.tfevents.1675917773.r8n07.149353.0",
+      "log/greedy_search/errs-test-clean-greedy_search-epoch-30-avg-9-streaming-chunk-size-32-context-2-max-sym-per-frame-1-use-averaged-model.txt",
+      "log/greedy_search/errs-test-other-greedy_search-epoch-30-avg-9-streaming-chunk-size-32-context-2-max-sym-per-frame-1-use-averaged-model.txt",
+      "log/greedy_search/log-decode-epoch-30-avg-9-streaming-chunk-size-32-context-2-max-sym-per-frame-1-use-averaged-model-2023-02-12-08-58-48",
+      "log/greedy_search/log-decode-epoch-30-avg-9-streaming-chunk-size-32-context-2-max-sym-per-frame-1-use-averaged-model-2023-02-12-09-04-44",
+      "log/greedy_search/recogs-test-clean-greedy_search-epoch-30-avg-9-streaming-chunk-size-32-context-2-max-sym-per-frame-1-use-averaged-model.txt",
+      "log/greedy_search/recogs-test-other-greedy_search-epoch-30-avg-9-streaming-chunk-size-32-context-2-max-sym-per-frame-1-use-averaged-model.txt",
+      "log/greedy_search/wer-summary-test-clean-greedy_search-epoch-30-avg-9-streaming-chunk-size-32-context-2-max-sym-per-frame-1-use-averaged-model.txt",
+      "log/greedy_search/wer-summary-test-other-greedy_search-epoch-30-avg-9-streaming-chunk-size-32-context-2-max-sym-per-frame-1-use-averaged-model.txt",
+      "log/log-train-2023-02-05-17-58-35-0",
+      "log/log-train-2023-02-05-17-58-35-1",
+      "log/log-train-2023-02-05-17-58-35-2",
+      "log/log-train-2023-02-05-17-58-35-3",
+      "log/log-train-2023-02-08-23-42-53-0",
+      "log/log-train-2023-02-08-23-42-53-1",
+      "log/log-train-2023-02-08-23-42-53-2",
+      "log/log-train-2023-02-08-23-42-53-3",
+      "log/modified_beam_search/errs-test-clean-beam_size_4-epoch-30-avg-9-streaming-chunk-size-32-modified_beam_search-beam-size-4-use-averaged-model.txt",
+      "log/modified_beam_search/errs-test-other-beam_size_4-epoch-30-avg-9-streaming-chunk-size-32-modified_beam_search-beam-size-4-use-averaged-model.txt",
+      "log/modified_beam_search/log-decode-epoch-30-avg-9-streaming-chunk-size-32-modified_beam_search-beam-size-4-use-averaged-model-2023-02-12-09-10-17",
+      "log/modified_beam_search/recogs-test-clean-beam_size_4-epoch-30-avg-9-streaming-chunk-size-32-modified_beam_search-beam-size-4-use-averaged-model.txt",
+      "log/modified_beam_search/recogs-test-other-beam_size_4-epoch-30-avg-9-streaming-chunk-size-32-modified_beam_search-beam-size-4-use-averaged-model.txt",
+      "log/modified_beam_search/wer-summary-test-clean-beam_size_4-epoch-30-avg-9-streaming-chunk-size-32-modified_beam_search-beam-size-4-use-averaged-model.txt",
+      "log/modified_beam_search/wer-summary-test-other-beam_size_4-epoch-30-avg-9-streaming-chunk-size-32-modified_beam_search-beam-size-4-use-averaged-model.txt",
+      "test_wavs/1089-134686-0001.wav",
+      "test_wavs/1221-135766-0001.wav",
+      "test_wavs/1221-135766-0002.wav",
+      "test_wavs/trans.txt"
+    ]
+  },
+  "vosk-python": {
+    "version": "0.3.45",
+    "requires_python": ">=3",
+    "requires_dist": [
+      "cffi (>=1.0)",
+      "requests",
+      "tqdm",
+      "srt",
+      "websockets"
+    ],
+    "artifacts": [
+      {
+        "filename": "vosk-0.3.45-py3-none-manylinux2014_aarch64.whl",
+        "size": 2368543,
+        "url": "https://files.pythonhosted.org/packages/a4/23/3130a69fa0bf4f5566a52e415c18cd854bf561547bb6505666a6eb1bb625/vosk-0.3.45-py3-none-manylinux2014_aarch64.whl",
+        "digests": {
+          "blake2b_256": "a4233130a69fa0bf4f5566a52e415c18cd854bf561547bb6505666a6eb1bb625",
+          "md5": "6ac65b5d5170371c2d0b815fc019f302",
+          "sha256": "54efb47dd890e544e9e20f0316413acec7f8680d04ec095c6140ab4e70262704"
+        },
+        "requires_python": ">=3"
+      }
+    ]
+  },
+  "sherpa-onnx-python": {
+    "version": "1.13.8",
+    "requires_python": ">=3.7",
+    "requires_dist": [
+      "sherpa-onnx-core==1.13.8"
+    ],
+    "artifacts": [
+      {
+        "filename": "sherpa_onnx-1.13.8-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
+        "size": 4177610,
+        "url": "https://files.pythonhosted.org/packages/c6/02/f2300e5cb07a611afcac5699a97c8d6f229f53a7c751882818ed40a7f72f/sherpa_onnx-1.13.8-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
+        "digests": {
+          "blake2b_256": "c602f2300e5cb07a611afcac5699a97c8d6f229f53a7c751882818ed40a7f72f",
+          "md5": "741f93ac96f1250a2929d9c0184b8f84",
+          "sha256": "b56808d19a79368dcaa507d02a4c1ce537ca713fab9fedd91256b4ec599c6bf7"
+        },
+        "requires_python": ">=3.7"
+      },
+      {
+        "filename": "sherpa_onnx-1.13.8-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
+        "size": 4177700,
+        "url": "https://files.pythonhosted.org/packages/13/e3/115476caa9f80cd5f55e4e7b777a6c2d01a133d10f8fae574ba869fc48c3/sherpa_onnx-1.13.8-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
+        "digests": {
+          "blake2b_256": "13e3115476caa9f80cd5f55e4e7b777a6c2d01a133d10f8fae574ba869fc48c3",
+          "md5": "43cd86e4b740cef18e82dcb0ee6ae009",
+          "sha256": "916ec38242e779ee3a99f7b161bd1bf3b02a7fad34cb073d091021c0469e0b58"
+        },
+        "requires_python": ">=3.7"
+      }
+    ]
+  },
+  "sherpa-onnx-core-python": {
+    "version": "1.13.8",
+    "requires_python": null,
+    "requires_dist": null,
+    "artifacts": [
+      {
+        "filename": "sherpa_onnx_core-1.13.8-py3-none-manylinux2014_aarch64.whl",
+        "size": 13353426,
+        "url": "https://files.pythonhosted.org/packages/9c/72/02227b14cd3fb3d504a8814ad144ed321a53331948c893821e02f4abb1d7/sherpa_onnx_core-1.13.8-py3-none-manylinux2014_aarch64.whl",
+        "digests": {
+          "blake2b_256": "9c7202227b14cd3fb3d504a8814ad144ed321a53331948c893821e02f4abb1d7",
+          "md5": "594a5f39f0480f91863a74303c68cad8",
+          "sha256": "a51a03d55c376c32e15dd63ea852236042ba91a5cd73e253bbf7cf21f6582ba9"
+        },
+        "requires_python": null
+      }
+    ]
+  }
+}

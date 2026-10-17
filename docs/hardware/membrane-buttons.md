@@ -1,5 +1,12 @@
 # Membrane key buttons (13)
 
+Documentation follow-up (2026-10-16; no new GPIO probe): the
+[dictation insertion guide](../research/npu-stt/insertion.md) records the
+single GPIO-owner requirement and the current daemon's full-tap-on-both-edges
+behavior that must be reconciled for hold-to-dictate. Mapping/polarity and
+replacement-HAT state still require live verification; this note changes no
+hardware status or daemon behavior.
+
 > Status: **In progress** (mirrors the README table) — 9 of 13 keys live via a
 > userspace daemon; 3 parked pending a physical re-test, 1 suspected fused to
 > the PMIC power-key input.
