@@ -163,6 +163,29 @@ class XSide:
                                     0, 0)
         self.d.sync()
 
+    def inject(self, keysym, kind):
+        """One HALF-edge: X.KeyPress for kind == 'press', X.KeyRelease for
+        'release'. Held keys must be released (release_all) before close —
+        see the run() finally block."""
+        if not self.d:
+            return
+        code = self.codes[keysym]
+        self.d.xtest_fake_input(X.KeyPress if kind == "press" else X.KeyRelease,
+                                code, X.CurrentTime, self.root, 0, 0)
+        self.d.sync()
+
+    def release_all(self):
+        """Release every keycode we have resolved, for clean shutdown."""
+        if not self.d:
+            return
+        try:
+            for code in self.codes.values():
+                self.d.xtest_fake_input(X.KeyRelease, code, X.CurrentTime,
+                                        self.root, 0, 0)
+            self.d.sync()
+        except Exception as e:
+            log.debug("release_all: %s: %s", type(e).__name__, e)
+
     def close(self):
         if self.d is not None:
             try:
@@ -248,13 +271,16 @@ def run(_args):
             for keysym, kind in edges:
                 log.debug("%s %s", kind, keysym)
                 try:
-                    xs.press(keysym)
+                    xs.inject(keysym, kind)
                 except Exception as e:  # display died mid-edge: reconnect
                     log.warning("xtest: %s: %s", type(e).__name__, e)
                     xs.close()
                     break
             time.sleep(POLL_S)
     finally:
+        # Drop any half-edge held at shutdown (e.g. a held Control_L PTT)
+        # so the X desktop doesn't see a stuck modifier after restart.
+        xs.release_all()
         for _p, req, _l in chips:
             try:
                 req.release()

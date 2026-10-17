@@ -128,6 +128,13 @@ func (s *sampler) handleHistory(w http.ResponseWriter, r *http.Request) {
 			minutes = v
 		}
 	}
+	// Clamp to the retained window (ringSize samples * tickInterval = 60
+	// minutes) BEFORE any allocation: an unbounded request could allocate a
+	// (minutes+1)-bucket map far beyond what the ring holds, and minutes
+	// near MaxInt64 would overflow the +1 below.
+	if minutes > ringSize/12 {
+		minutes = ringSize / 12
+	}
 
 	type agg struct {
 		memSum, diskSum float64

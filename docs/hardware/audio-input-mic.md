@@ -59,9 +59,9 @@ left bumper is held. Distinct from the output chain, which is settled
   returned 32 000 frames at **rms ≈ 1 527, peak ≈ 5 735** — real signal, not
   the bit-exact zero the card-0 HDMI capture produced. This is the
   deck's first working input path; the voice agent's push-to-talk has a
-  recordable source. (The `setup.sh` `audio-cards` verify row asserts exactly
-  one card and predates this — re-check it when the next `setup.sh` pass
-  runs.)
+  recordable source. The `setup.sh` `audio-cards` verify row has been revised
+  (2026-10-16) to require exactly this two-card configuration —
+  `allwinner-hdmi` + one `USB-Audio` card, count 2.
 
 ## How we know
 
@@ -103,8 +103,9 @@ device selection remain unverified. Hardware status remains Partial.
 - Cross-references: [speaker-hat-amp.md](speaker-hat-amp.md) (output-only
   chain, amp identity), [hdmi-audio.md](hdmi-audio.md) (card identity),
   [headphone-jack.md](headphone-jack.md) (jack shares the amp path),
-  `setup.sh` verify rows `audio-cards` (exactly one card) and
-  `stale-overlays` (no `es8388`/`i2c0` dtbos, no `i2c-0` adapter).
+  `setup.sh` verify rows `audio-cards` (`allwinner-hdmi` + one `USB-Audio`
+  capture card, count 2) and `stale-overlays` (no `es8388`/`i2c0` dtbos, no
+  `i2c-0` adapter).
 
 ## What it portends
 
@@ -120,9 +121,4 @@ device selection remain unverified. Hardware status remains Partial.
   focused field), which is the G2 gate.
 - **Options B/C (onboard input / 3.5 mm jack)** remain dead unless later
   traced; Option A supersedes them for now.
-- **Housekeeping (verified 2026-10-16):** `setup.sh`'s `audio-cards` verify row
-  (line 1588) hard-requires `ncards == 1` and card `allwinnerhdmi` — the
-  attached USB mic (card 1) makes that row FAIL. It must be revised to
-  tolerate the known-good USB capture card before the next `setup.sh` pass
-  ([docs/setup.md](../setup.md) mandate).
 - Status flips to **Done** when a round trip uses the mic (voice agent G2).
