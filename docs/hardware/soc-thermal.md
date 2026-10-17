@@ -1,12 +1,24 @@
 # SoC temperature (CPU/DDR/GPU/NPU)
 
-Resource-budget correction (manufacturer literature, 2026-10-16): Allwinner
-specifies A733 as **2 Cortex-A76 + 6 Cortex-A55**, up to 2 GHz; see the
-[manufacturer specification](https://www.allwinnertech.com/index.php?a=index&c=product&id=139).
-Earlier voice notes describing eight A76s or four big cores must not guide
-thread affinity. Live CPU IDs, active frequencies and sustained cooling behavior
-still need probing. [Dictation resource analysis](../../journal/2026-10-16_dictation-resource-budget.md)
-records the scheduling implications; no new thermal measurement or status change.
+CPU topology — **live-confirmed 2026-10-16** (was a literature-only claim;
+now evidenced). Allwinner specifies A733 as **2 Cortex-A76 + 6 Cortex-A55**, up
+to 2 GHz ([manufacturer spec](https://www.allwinnertech.com/index.php?a=index&c=product&id=139)).
+The live device tree agrees per core:
+
+  | Linux CPU | device-tree `compatible` | cpufreq policy | min–max |
+  |---|---|---|---|
+  | cpu0–cpu5 (6) | `arm,cortex-a55` | policy0 | 416 MHz–**1.794 GHz** |
+  | cpu6–cpu7 (2) | `arm,cortex-a76` | policy6 | 416 MHz–**2.002 GHz** |
+
+So the big cluster is the 2 A76 cores (cpu6–7, 2.002 GHz) and the 6 A55 cores
+(cpu0–5, 1.794 GHz); the kernel's own `cpub`/`cpul` thermal zones match.
+**Caveat for later probes:** `/proc/cpuinfo` reports the *union* of flags
+across all cores, so every core shows `asimddp` (an A76 feature) — do **not**
+infer "8×A76" from `/proc/cpuinfo`; the per-core `compatible` string in
+`/sys/firmware/devicetree/base/cpus/cpu@*` is the authoritative split. Earlier
+voice notes describing eight A76s or four big cores must not guide thread
+affinity. [Dictation resource analysis](../../journal/2026-10-16_dictation-resource-budget.md)
+records the scheduling implications. Status unchanged (Done).
 
 > Status: **Done** (mirrors the README table)
 

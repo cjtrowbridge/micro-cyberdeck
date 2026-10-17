@@ -1,7 +1,7 @@
 ---
 plan_id: 2026-09-23-22-57-17_voice-agent-gates
 title: Voice agent — run the gates (G0 mic → G1 resident → G2 chain → G3 app)
-summary: Gate execution for projects/voice-agent per the design's G0-G3 plan. G0 = identify + prove the audio input path (2026-09-23 probes: the only ALSA capture subdevice is a dead-end HDMI-Rx codec — bit-exact silence — so Option A, USB mic via OTG, is the declared path; hardware proof pending). G1 = provisioning batch + whisper.cpp vendoring + both models resident + the RAM numbers logged. G2 = the headless shell chain with per-stage wall times. G3 = the ebe app push-to-talk round trip on :1.
+summary: Gate execution for projects/voice-agent per the design's G0-G3 plan. G0 = identify + prove the audio input path (2026-09-23 probes: the only ALSA capture subdevice is a dead-end HDMI-Rx codec — bit-exact silence — so Option A, USB mic via OTG, is the declared path). G1 = provisioning batch + whisper.cpp vendoring + both models resident + the RAM numbers logged. G2 = the headless shell chain with per-stage wall times. G3 = the ebe app push-to-talk round trip on :1. SCOPE (2026-10-16): governs the spoken-answer/voice-assistant arc (ASR→LLM→TTS) + model residency ONLY — the TL push-to-talk trigger-event design and streaming dictation are governed by plans/current/2026-10-16-20-17-37_npu-first-streaming-dictation.md, which supersedes any dictation framing here. Reconciled (no pending action completed): USB-mic G0 now evidenced (PCM2902 on OTG = ALSA card 1, 16 kHz mono real signal, 2026-10-16) and whisper runtime = system unit on :8086 (not a user unit on :8080).
 status: current
 created_at: 2026-09-23-22-57-17
 revised: 2026-09-29
@@ -10,6 +10,15 @@ revised: 2026-09-29
 Key: `[ ]` pending task, `[x]` completed task, `[?]` needs validation, `[-]` closed task
 
 # Voice agent — run the gates
+
+> **Scope (2026-10-16):** this plan governs the **spoken-answer / voice-assistant
+> arc** (ASR → LLM → TTS) and model residency for `projects/voice-agent` **only**.
+> The TL **push-to-talk trigger-event design and streaming dictation** are governed
+> by [2026-10-16-20-17-37_npu-first-streaming-dictation.md](2026-10-16-20-17-37_npu-first-streaming-dictation.md)
+> (milestone 5.2), which supersedes any dictation framing in this plan. Reconciled,
+> not re-closed: USB-mic G0 is now **evidenced** (PCM2902 on OTG = ALSA card 1,
+> 16 kHz mono real signal, 2026-10-16 — see `docs/hardware/audio-input-mic.md`) and
+> the whisper runtime is a **system unit on :8086** (not a user unit on :8080).
 
 Design of record: [`projects/voice-agent/docs/design.md`](../../projects/voice-agent/docs/design.md)
 (§8 is the gate contract; this plan executes it). Predecessor:

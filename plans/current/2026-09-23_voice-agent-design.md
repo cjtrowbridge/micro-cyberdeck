@@ -1,15 +1,23 @@
 ---
 plan_id: 2026-09-23-voice-agent-design
 title: Voice agent — design the push-to-talk runtime (whisper-medium + qwen3.5:4b resident, left-bumper PTT)
-summary: Establish the voice agent as a tracked project (projects/voice-agent/) and settle the design: the topology (Ebitengine app on :1 + loopback sidecar), the residency policy (Ollama keep_alive -1 + whisper-server as a user unit), the audio-capture question (no input path exists on the board today — options A/B/C), and the gate plan G0–G3 from design to first push-to-talk round trip. This plan is DESIGN ONLY: nothing is provisioned, cloned, built, or installed. Gate execution is a follow-on plan keyed to G0's outcome.
+summary: Establish the voice agent as a tracked project (projects/voice-agent/) and settle the design: the topology (Ebitengine app on :1 + loopback sidecar), the residency policy (Ollama keep_alive -1 + whisper-server as a user unit), the audio-capture question (no input path exists on the board today — options A/B/C), and the gate plan G0–G3 from design to first push-to-talk round trip. This plan is DESIGN ONLY: nothing is provisioned, cloned, built, or installed. Gate execution is a follow-on plan keyed to G0's outcome. SCOPE (2026-10-16): governs the spoken-answer/voice-assistant design (ASR→LLM→TTS) ONLY — the TL push-to-talk trigger-event design and streaming dictation are governed by plans/current/2026-10-16-20-17-37_npu-first-streaming-dictation.md.
 status: current
 created_at: 2026-09-23
-revised: 2026-09-23
+revised: 2026-10-16
 ---
 
 Key: `[ ]` pending task, `[x]` completed task, `[?]` needs validation, `[-]` closed task
 
 # Voice agent — design the push-to-talk runtime
+
+> **Scope (2026-10-16):** this is the **design-of-record for the
+> spoken-answer / voice-assistant arc** (ASR → LLM → TTS) for
+> `projects/voice-agent`. The TL **push-to-talk trigger-event design and
+> streaming dictation** are governed by
+> [2026-10-16-20-17-37_npu-first-streaming-dictation.md](2026-10-16-20-17-37_npu-first-streaming-dictation.md)
+> (milestone 5.2), which supersedes any "left-bumper PTT dictation" framing in
+> this design.
 
 User intent (2026-09-23): "an efficient way to set up an ebe runtime that uses
 the whole screen and keeps whisper-medium and qwen3.5:4b resident in memory,

@@ -2,8 +2,9 @@
 plan_id: 2026-10-16-20-17-37_npu-first-streaming-dictation
 title: NPU feasibility first, then streaming dictation on NPU or CPU
 summary: Time-box A733 NPU revalidation and STT acceleration feasibility, then implement measured live push-to-talk dictation with a CPU fallback regardless of NPU outcome.
-status: future
+status: current
 created_at: 2026-10-16-20-17-37
+revised: 2026-10-16
 ---
 
 # NPU feasibility first, then streaming dictation
@@ -218,6 +219,60 @@ assets; do not silently install framework bootstrap examples over setup.sh.
         Publish app compatibility, accuracy results, resource limits and NPU
         decision. Move this plan to past and refresh indexes only when all
         required acceptance criteria have evidence.
+
+### Trigger event design (milestone 5.2)
+
+Design of record for 5.2 — how the physical trigger becomes **start/stop
+dictation events** rather than a held modifier key in the destination.
+
+**The problem with the current mapping.** `tools/hat-buttons.py` maps the left
+trigger (TL) to *hold down* `Control_L`: it sends a `Control_L` keydown while
+the button is held and a keyup on release. That is the right shape for a
+modifier-key button, but it is the wrong shape for dictation — the destination
+IME sees a *held `Control_L`* (a half-edge that was patched in 2026-10-16 to
+make the held state well-defined), not a discrete *start* then *stop*. Dictation
+needs two clean edges: **press = start capturing** (falling edge), **release =
+stop + final flush** (rising edge).
+
+**Invariant — one GPIO owner.** Exactly one process reads the TL GPIO edge and
+decides what it means; nothing else synthesizes TL input. Keeping the existing
+`hat-buttons.py` as that owner is the low-risk choice: it already owns the TL
+pin, already has working edge handling (the 2026-10-16 half-edge fix), and
+preserves every other button mapping untouched. TL's *action* changes from
+"emit a held `Control_L` to the active window" to "emit `dictation.start` on
+falling edge and `dictation.stop` on rising edge to the dictation runtime."
+The other mapped buttons (the rest of the 13) keep their current mappings
+verbatim; verify them against this HAT's live pinmap via `button-map.py`
+rather than copying historical assumptions (the 5.2 text already requires this).
+
+**Edge semantics (the contract 5.3 will consume).**
+- Falling edge (press): emit `start`; the runtime begins capture (5.1) and
+  preedit accumulation (5.3).
+- Rising edge (release): emit `stop`; the runtime drains queued audio and does
+  its chosen runtime's final flush (5.3).
+- **No re-trigger while held:** after a falling edge the next event must be the
+  matching rising edge; ignore further falls until a clean release. A button
+  already held at daemon start is treated as *released-then-pressed* so the
+  first edge is unambiguous (debounce the first edge).
+- **TL is consumed in dictation mode:** while dictation is the active mode the
+  destination IME must **not** receive a held `Control_L` for TL. If the
+  operator wants the old modifier behavior back, that is an explicit mode
+  change, not the default.
+- **No automatic Enter:** releasing never commits a newline (5.3); stop only
+  finalizes the in-progress utterance.
+
+**Handoff to the runtime.** `hat-buttons.py` (the single owner) delivers the
+`start`/`stop` events to the dictation runtime over the same local channel the
+runtime already uses (the unix-socket the ALSA plugin / engine pattern uses),
+so the trigger does not need its own transport. This is the same
+"thin owner + engine" split the HAT speaker already uses (`gamepi-sound`);
+it keeps the GPIO/edge logic out of the model/runtime process.
+
+**Status of the transitional fix.** The 2026-10-16 half-edge correction in
+`tools/hat-buttons.py` remains valid for the *other* keys (its held/modified
+behavior is now well-defined). For **TL specifically** it is superseded by the
+`start`/`stop` event model above — but the underlying edge detection it added
+is reused, so nothing in the daemon's plumbing is thrown away.
 
 ## Acceptance and limits
 
