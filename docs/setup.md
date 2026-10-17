@@ -157,7 +157,7 @@ Reboot mode flags are ignored in plan mode and never recorded.
 | 7 | Units all active | `systemctl is-active` for all eight `gamepi-*` units (the loop `xvfb openbox vnc lcd sound buttons websockify shellinabox`): xvfb, openbox, vnc, lcd, sound (the v3.6 socket engine daemon), buttons (the gpiod→XTest membrane key daemon), websockify, shellinabox (incl. the two browser-bridge units, plan 2026-09-20-10-47-32) |
 | 8 | SPI clock | `cat /sys/class/spi-master/spi3/max_speed_hz` (informational; logged, not gating) |
 | 9 | RT budget live + persisted | `cat /proc/sys/kernel/sched_rt_runtime_us` == `-1` (the drop-in persists it across reboots; the board has no `sysctl` binary, so the read is from `/proc`) |
-| 10 | Audio topology as intended | `/proc/asound/cards` contains exactly one card, `allwinnerhdmi` (the HAT amp is GPIO/PWM pin 12 — any second card means something bound an I2S path that should not exist here) |
+| 10 | Audio topology as intended | `/proc/asound/cards` contains exactly **two** cards: `allwinnerhdmi` (driver `allwinner-hdmi`; the HAT amp is GPIO/PWM pin 12 — an I2S card would be drift) **plus** one `USB-Audio` capture card (the PCM2902 USB-C mic, `08bb:2902` — docs/hardware/audio-input-mic.md). The check keys on the **driver string**, not the card name (the mic's name is a bare `Device`), so any third card, a missing `allwinnerhdmi`, or a missing `USB-Audio` is drift. A board with the mic unplugged FAILs this row by design — re-plug the mic (a `setup.sh` run is expected on a mic-connected deck) or the pre-2026-10-16 single-card rule applies to a fresh flash only. |
 | 11 | No stale audio-path overlays | no `es8388-audio`/`i2c0` `.dtbo` in `/boot/overlay-user` (or the older directory) and no `i2c-0` under `/sys/bus/i2c/devices` |
 | 12 | HAT sound daemon socket | `[[ -S /run/gamepi-sound.sock ]]` — the v3.6 daemon bound the PCM socket (0666, any user may connect; serialized on accept). Transient: created at unit start (bind), unlinked by the engine on exit, wiped by the tmpfs `/run` at boot. A `--plan` run **before** the first v3.6 apply legitimately FAILs this row (the old unit ran `-i`). |
 | 13 | Ollama model library | GET `http://localhost:11434/api/version` succeeds, and GET `/api/tags` (`jq -r '.models[].name'`) names **every** `OLLAMA_MODELS` entry. Apply mode pulls any missing model before this row runs (§3g — via the host `ollama` CLI when resolvable, else `docker exec ollama ollama pull`, the current board's deployment; the first run on a fresh board may take a while, the second pulls nothing). Plan mode reports absent models as drift instead. An unreachable API or unresolvable pull path is FAIL/DRIFT: the service install (a Docker container in the current deployment) is outside setup.sh's scope. |
@@ -181,10 +181,15 @@ Implementation notes (live-verified pitfalls, fixed 2026-09-15 — do not revert
   `ls` exits 2), so a stale dtbo present in only one of the two directories went
   undetected by the audit while apply-mode's `[[ -f ]]` removal still fired —
   observed live on a real board, fixed by removing the pipeline.
-- Row 10 reads the card **name** from `awk -F'[][]'` field `$2` (field `$3` is
-  the driver string) and enforces the count with
-  `grep -c '^[[:space:]]*[0-9]'`. The live format is
-  `NN [cardname  ]: driver - driver` plus an unnumbered continuation line.
+- Row 10 keys off the **driver string** — `awk -F'[][]'` field `$3`, stripped
+  of its leading `: ` and `sort -u` — not the card name in field `$2` (the USB
+  mic's name is a bare `Device`, but its driver is `USB-Audio`; the HAT path's
+  name is `allwinnerhdmi`, driver `allwinner-hdmi`). It counts cards with
+  `grep -c '^[[:space:]]*[0-9]'` and requires exactly the two drivers
+  `allwinner-hdmi` **and** `USB-Audio`. The live format is
+  `NN [cardname  ]: driver - driver` plus an unnumbered continuation line
+  (the continuation carries the USB device string and is excluded by the
+  `^[[:space:]]*[0-9]` line test).
 
 Every item reports PASS, FAIL, or SKIPPED. In `--plan` mode, a FAIL or any
 desired-vs-current difference counts toward `RESULT: DRIFT:<n>` (exit 1,

@@ -1580,15 +1580,24 @@ run_verify() {
     add_item "rt-sysctl" "FAIL" "sched_rt_runtime_us='${rtv}' desired='-1'" 
   fi
 
-  # -F'[][]' fields: $1=index, $2=CARD NAME, $3=driver string — the name is $2
-  # (verified live: ' 0 [allwinnerhdmi  ]: allwinner-hdmi - allwinner-hdmi').
-  # $2 (card name) + an explicit count enforce "exactly one card" per docs/setup.md.
-  alc="$(awk -F'[][]' '/^[[:space:]]*[0-9]/ {print $2}' /proc/asound/cards 2>/dev/null | tr -d ' \r' | tr '\n' ' ' | sed 's/ $//')"
+  # -F'[][]' fields: $1=index, $2=CARD NAME, $3=driver string. Key on the DRIVER
+  # string, not the card name: the USB mic's name is a bare "Device" but its
+  # driver is "USB-Audio" (live 2026-10-16:
+  #   0 [allwinnerhdmi  ]: allwinner-hdmi - allwinner-hdmi
+  #   1 [Device         ]: USB-Audio - USB PnP Sound Device).
+  # Desired: allwinner-hdmi (the HAT amp is GPIO/PWM pin 12, NOT I2S) plus exactly
+  # one USB-Audio capture card (the PCM2902 USB-C mic —
+  # docs/hardware/audio-input-mic.md). Any other driver, or a count mismatch, is drift.
+  alc="$(awk -F'[][]' '/^[[:space:]]*[0-9]/ {print $2}' /proc/asound/cards 2>/dev/null | tr -d ' \r' | sort | tr '\n' ' ' | sed 's/ $//')"
+  alcd="$(awk -F'[][]' '/^[[:space:]]*[0-9]/ {print $3}' /proc/asound/cards 2>/dev/null | sed 's/^[[:space:]]*:[[:space:]]*//' | awk 'NF {print $1}' | sort -u)"
   ncards="$(grep -c '^[[:space:]]*[0-9]' /proc/asound/cards 2>/dev/null || true)"
-  if [[ "$alc" == "allwinnerhdmi" && "$ncards" == "1" ]]; then
-    add_item "audio-cards" "PASS" "single card allwinnerhdmi (HAT audio is GPIO/PWM pin 12, not I2S)"
+  has_hdmi=0; has_usb=0
+  if [[ "$alcd" == *"allwinner-hdmi"* ]]; then has_hdmi=1; fi
+  if [[ "$alcd" == *"USB-Audio"* ]]; then has_usb=1; fi
+  if (( has_hdmi == 1 && has_usb == 1 && ncards == 2 )); then
+    add_item "audio-cards" "PASS" "allwinnerhdmi + USB-Audio (PCM2902 USB-C mic); HAT amp is GPIO/PWM pin 12, not I2S"
   else
-    add_item "audio-cards" "FAIL" "cards='${alc}' count='${ncards}' desired='exactly one card: allwinnerhdmi'"
+    add_item "audio-cards" "FAIL" "names='${alc}' drivers='${alcd//$'\n'/ }' count='${ncards}' desired='allwinnerhdmi + one USB-Audio (PCM2902)'"
   fi
 
   # v3.6: the gamepi-sound unit runs the socket engine (plan 2026-09-15 WS2),
