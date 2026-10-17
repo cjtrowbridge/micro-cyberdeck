@@ -1,6 +1,8 @@
 # Audio input (microphone)
 
-> Status: **Not started** (mirrors the README table)
+> Status: **Partial** (mirrors the README table) — a USB mic (card 1) is
+> connected and records non-silence; the voice agent round trip that would
+> consume it is not yet built.
 
 ## What it is
 
@@ -49,9 +51,17 @@ left bumper is held. Distinct from the output chain, which is settled
   audio-configuration tutorial requires purchasing a separate external GPIO
   audio module. This HAT clone adds the speaker/amp (output) and the jack;
   nothing documents a mic.
-- **No USB audio is attached** (probe-time `lsusb`: root hubs only). The SBC's
-  OTG port is the one clean input route that needs no HAT surgery: any USB
-  mic (or headset) becomes a normal second ALSA card.
+- **USB audio via OTG now exists and works (Option A landed, 2026-10-16).**
+  The operator connected a USB-C PnP sound device — `lsusb` shows
+  **`08bb:2902 Texas Instruments PCM2902 Audio Codec`** on bus 001; ALSA
+  enumerates it as **card 1** (`USB PnP Sound Device`, subdevice 0/0, capture
+  present). A 2 s probe at 16 kHz / S16 / mono (`arecord -D plughw:1,0`)
+  returned 32 000 frames at **rms ≈ 1 527, peak ≈ 5 735** — real signal, not
+  the bit-exact zero the card-0 HDMI capture produced. This is the
+  deck's first working input path; the voice agent's push-to-talk has a
+  recordable source. (The `setup.sh` `audio-cards` verify row asserts exactly
+  one card and predates this — re-check it when the next `setup.sh` pass
+  runs.)
 
 ## How we know
 
@@ -66,6 +76,16 @@ left bumper is held. Distinct from the output chain, which is settled
   amixer -c 0 contents | head -30   # HDMI-format controls only
   ```
 
+- Re-probe (bare, no sudo), 2026-10-16 15:35 local — Option A landed:
+
+  ```bash
+  lsusb                       # 08bb:2902 Texas Instruments PCM2902 Audio Codec
+  cat /proc/asound/cards      # card 1: USB PnP Sound Device
+  arecord -l                  # card 1, device 0, subdevices 1/1
+  arecord -D plughw:1,0 -f S16_LE -r 16000 -c 1 -t wav -d 2 /tmp/probe16k.wav
+  python3 -c '…wave peak/rms…'  # → frames=32000 rms=1527 peak=5735 (signal)
+  ```
+
 - Journals: [`2026-09-23-voice-agent-g0-mic-probes.md`](2026-09-23-voice-agent-g0-mic-probes.md)
   (the full probe transcript and the option decision).
 - Cross-references: [speaker-hat-amp.md](speaker-hat-amp.md) (output-only
@@ -76,29 +96,21 @@ left bumper is held. Distinct from the output chain, which is settled
 
 ## What it portends
 
-- **There is no working input path on the deck today.** The voice agent's
-  push-to-talk has nothing to record until one of the options below lands —
-  this is the G0 blocker in
-  [`plans/current/2026-09-23-22-57-17_voice-agent-gates.md`](../../plans/current/2026-09-23-22-57-17_voice-agent-gates.md).
-- **Options (design
-  [`projects/voice-agent/docs/design.md`](../../projects/voice-agent/docs/design.md)
-  §4):**
-  - **A — USB mic via OTG (the declared G0 path):** zero kernel work; the new
-    card appears as `hw:1` (expected) with a capture subdevice; the sidecar's
-    `ALSA_INPUT` takes it. Cost: one part, and a visible dongle on the deck
-    while it's plugged
-  - **B — onboard input, if the HAT actually has one (now thinner odds):**
-    the eight-pin IC that option kept open has been ID'd as the HAT's power
-    part (marking `9813`/`2512`,
-    [power-path.md](power-path.md) WS1.5), so the remaining question is
-    purely the 3.5 mm jack's second conductor (G0-c): open the case and
-    trace it. Even a winning find requires a DT overlay and possibly a codec
-    driver module (`CONFIG_SND_SOC_ES8388` absent *to-probe*) before Linux
-    sees it
-  - **C — the 3.5 mm jack as TRRS mic input:** dead unless B shows the wiring;
-    the amp is output-only, so there is no input stage behind it today
-- **Disk interaction:** the mic itself costs nothing on disk (USB), but G1's
-  weights + toolchain need the qwen3.5:9b prune decision (operator) — see the
-  gate plan, G1-a.
-- Status flips to **Partial** when a capture device records non-silence (A or
-  B evidence), and **Done** when a round trip uses it (voice agent G2).
+- **Option A (USB mic via OTG) is now proven** — card 1 records real signal
+  (2026-10-16 probe above), so the voice agent's push-to-talk has a
+  recordable source. The G0 blocker in
+  [`plans/current/2026-09-23-22-57-17_voice-agent-gates.md`](../../plans/current/2026-09-23-22-57-17_voice-agent-gates.md)
+  clears.
+- **Still open:** the ASR engine choice for the required real-time interim
+  transcription (the 2026-10-16 design conversation — Whisper has no
+  partials endpoint; candidates are streaming engines such as Vosk /
+  Paraformer) and the round trip itself (record → ASR → inject into the
+  focused field), which is the G2 gate.
+- **Options B/C (onboard input / 3.5 mm jack)** remain dead unless later
+  traced; Option A supersedes them for now.
+- **Housekeeping (verified 2026-10-16):** `setup.sh`'s `audio-cards` verify row
+  (line 1588) hard-requires `ncards == 1` and card `allwinnerhdmi` — the
+  attached USB mic (card 1) makes that row FAIL. It must be revised to
+  tolerate the known-good USB capture card before the next `setup.sh` pass
+  ([docs/setup.md](../setup.md) mandate).
+- Status flips to **Done** when a round trip uses the mic (voice agent G2).

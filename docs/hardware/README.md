@@ -63,7 +63,7 @@ legible, so no part number has been assigned.
 | Screen touch (gt9271) | [touch-gt9271.md](touch-gt9271.md) | Not started |
 | Speaker (HAT amp) | [speaker-hat-amp.md](speaker-hat-amp.md) | Done |
 | Audio as a normal device | [audio-normal-device.md](audio-normal-device.md) | In progress — paused |
-| Audio input (microphone) | [audio-input-mic.md](audio-input-mic.md) | Not started |
+| Audio input (microphone) | [audio-input-mic.md](audio-input-mic.md) | Partial | USB-C PnP mic (PCM2902, card 1) records non-silence (2026-10-16 probe); voice-agent round trip not yet built |
 | Headphone jack | [headphone-jack.md](headphone-jack.md) | Partial |
 | Membrane key buttons (13) | [membrane-buttons.md](membrane-buttons.md) | In progress |
 | Power button (PMIC key) | [power-button.md](power-button.md) | Done |
